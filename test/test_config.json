@@ -1,0 +1,9 @@
+{
+    "database": {
+        "db": "geo-resource-container-test"
+    },
+    "app-container-login": {
+        "logout": true
+    },
+    "disableCSRF": true
+}

@@ -1,0 +1,29 @@
+{
+  "name": "geo-resource-container",
+  "version": "1.0.0",
+  "description": "geographical resources",
+  "author": "adamspe@gmail.com",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "make test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamspe/geo-resource-container.git"
+  },
+  "dependencies": {
+      "app-container": "adamspe/app-container",
+      "mongoose-geojson-schema": "^2.1.2"
+  },
+  "devDependencies": {
+      "app-container-login": "adamspe/app-container-login",
+      "should": "^7.1.1",
+      "supertest": "^1.1.0"
+  },
+  "bugs": {
+    "url": "https://github.com/adamspe/geo-resource-container/issues"
+  },
+  "homepage": "https://github.com/adamspe/geo-resource-container#readme"
+}
