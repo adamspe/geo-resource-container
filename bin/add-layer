@@ -8,16 +8,23 @@ function usage() {
     process.exit(1);
 }
 
+function handleError(error) {
+    console.error();
+    console.error('error: ',error);
+    console.error();
+    process.exit(1);
+}
+
 if(!argv.f) {
     console.error('missing required parameter.');
     usage();
 }
 
-var preProcess = PreProcessorFactory(argv.f);
-preProcess.on('error',function(err) {
-    console.error('preProcess error:',err);
-    process.exit(1);
-})
+var preProcess = PreProcessorFactory({
+    filePath: argv.f,
+    fork: argv.fork
+});
+preProcess.on('error',handleError)
 .on('complete',function(results) {
     console.log('COMPLETE');
     console.dir(preProcess.results());
