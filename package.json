@@ -14,13 +14,14 @@
     "url": "git+https://github.com/adamspe/geo-resource-container.git"
   },
   "dependencies": {
-      "app-container": "adamspe/app-container",
-      "mongoose-geojson-schema": "^2.1.2"
+    "app-container": "adamspe/app-container",
+    "minimist": "^1.2.0",
+    "mongoose-geojson-schema": "^2.1.2"
   },
   "devDependencies": {
-      "app-container-login": "adamspe/app-container-login",
-      "should": "^7.1.1",
-      "supertest": "^1.1.0"
+    "app-container-login": "adamspe/app-container-login",
+    "should": "^7.1.1",
+    "supertest": "^1.1.0"
   },
   "bugs": {
     "url": "https://github.com/adamspe/geo-resource-container/issues"
