@@ -9,11 +9,13 @@ preProcess.on('error',function(err){
         key: 'error',
         obj: err.stack
     });
+    process.exit(1);
 })
 .on('complete',function(results) {
     process.send({
         key: 'complete',
         obj: results
     });
+    process.exit(0);
 });
 preProcess.start();
