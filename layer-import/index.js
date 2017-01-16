@@ -1,2 +1,2 @@
 
-module.exports.LayerPreProcessor = require('./pre/LayerPreProcessor');
+module.exports.PreProcessorFactory = require('./pre/PreProcessorFactory');
