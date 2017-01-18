@@ -63,6 +63,21 @@ class PreProcessor extends EventEmitter {
         }
     }
 
+    /**
+     * Synchronous cleanup
+     */
+    cleanupSync() {
+        var self = this,
+            results = self.results(),
+            tmpFolder = results.tmpFolder;
+        if(tmpFolder) {
+            fse.removeSync(tmpFolder);
+        }
+        self.results({
+            inputFile: results.inputFile
+        });
+    }
+
     _cleanup(originalErr){
         var self = this;
         if(self.results().tmpFolder) {

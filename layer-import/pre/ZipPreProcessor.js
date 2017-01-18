@@ -39,10 +39,6 @@ class ShpFinder extends EventEmitter {
 }
 
 class LayerPreProcessor extends ShpPreProcessor {
-    constructor(input) {
-        super(input);
-    }
-
     start() {
         this._extract();
     }

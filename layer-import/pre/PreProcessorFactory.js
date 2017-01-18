@@ -1,4 +1,4 @@
-var PrePcessorRunnerMonitor = require('./PreProcessorRunnerMonitor');
+var PreProcessorRunnerMonitor = require('./PreProcessorRunnerMonitor');
 
 const EXT_MAP = {
     'zip': require('./ZipPreProcessor'),
@@ -12,7 +12,7 @@ module.exports = function(input) {
         PreProcessorClass = EXT_MAP[ext];
     if(PreProcessorClass) {
         if(input.fork && !previousResults) {
-            return new PrePcessorRunnerMonitor(filePath);
+            return new PreProcessorRunnerMonitor(filePath);
         } else {
             return new PreProcessorClass(previousResults||filePath);
         }

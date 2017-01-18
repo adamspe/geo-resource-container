@@ -7,10 +7,6 @@ var fs = require('fs'),
 const PreProcessor = require('./PreProcessor');
 
 class ShpPreProcessor extends PreProcessor {
-    constructor(input) {
-        super(input);
-    }
-
     start() {
         var self = this,
             results = self.results(),

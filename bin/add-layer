@@ -1,10 +1,144 @@
-#!/usr/bin/env node
+#!/usr/bin/env node --preserve-symlinks
 var argv = require('minimist')(process.argv.slice(2)),
     layerImport = require('../layer-import'),
-    PreProcessorFactory = layerImport.PreProcessorFactory;
+    PreProcessorFactory = layerImport.PreProcessorFactory,
+    PostProcessorFactory = layerImport.PostProcessorFactory,
+    prompt = require('prompt'),
+    preProcessor,
+    postProcessor;
 
-function usage() {
-    console.error('add-layer -f <shapeFile>');
+prompt.override = argv;
+
+if(argv.h || argv.help) {
+    usage();
+}
+
+if(!argv.f) {
+    usage('missing required parameter.');
+}
+
+// start the ball rolling
+preProcessGeoInput();
+
+// pre-process the -f file input
+function preProcessGeoInput() {
+    preProcessor = PreProcessorFactory({
+        filePath: argv.f,
+        fork: argv.fork
+    });
+    preProcessor.on('error',handleError)
+                .on('complete',gatherUserInput);
+    preProcessor.start();
+}
+
+// gather user input
+function gatherUserInput(preResults) {
+    // if all required input is on the commandline then no need to prompt
+    if(argv.layerName && argv.featureNamingProperty && argv.layerSource) {
+        if(argv.layerSource === 'none') {
+            delete argv.layerSource;
+        }
+        var validProperties = Object.keys(preResults.properties);
+        if(validProperties.indexOf(argv.featureNamingProperty) === -1) {
+            console.error();
+            console.error('The feature naming property "%s" is not a valid.',argv.featureNamingProperty);
+            console.error();
+            console.error('It must be one of; %s',validProperties.join(', '));
+            console.error();
+            process.exit(1);
+        }
+        return importLayer(preResults,argv);
+    }
+    console.log();
+    console.log('Your layer will have %d features.',preResults.featureCount);
+    console.log('All features consistently contain the following property names with values.');
+    console.log(' (the values are examples collected from the feature input)');
+    console.log();
+    Object.keys(preResults.properties).forEach(function(key){
+        console.log('%s: %s',key,preResults.properties[key]);
+    });
+    console.log();
+    prompt.get([{
+        name: 'layerName',
+        description: 'What should this layer be named?',
+        required: true
+    },{
+        name: 'featureNamingProperty',
+        description: 'What property name should be used to identify each feature?',
+        message: 'You must specify one of '+Object.keys(preResults.properties).join(', '),
+        required: true,
+        conform: function(v) {
+            return Object.keys(preResults.properties).indexOf(v) !== -1;
+        }
+    },{
+        name: 'layerSource',
+        description: 'Where did the data for this layer originate (e.g. web URL)?',
+        required: false
+    }], function(err,userInput){
+        console.log();
+        console.log('Your new layer will contain %d features (assuming they can be indexed) and be named "%s"',preResults.featureCount,userInput.layerName);
+        console.log('Each layer will be identified by the value of its "%s" property.',userInput.featureNamingProperty);
+        if(!userInput.layerSource) {
+            delete userInput.layerSource;
+            console.log('You opted to not identify the source of this layer\'s data');
+        } else {
+            console.log('You identified "%s" as the source of this layer\'s data.',userInput.layerSource);
+        }
+        console.log();
+        prompt.get([{
+            name: 'correct',
+            description: 'Does this all sound correct? [y|n]',
+            before: function(v) { return v.toLowerCase(); },
+            pattern: /y|n/i
+        }],function(err,confirmResults){
+            if(confirmResults.correct === 'n') {
+                gatherUserInput(preResults);
+            } else {
+                prompt.get([{
+                    name: 'continue',
+                    description: 'Do you want to continue and import this layer? [y|n]',
+                    before: function(v) { return v.toLowerCase(); },
+                    pattern: /y|n/i
+                }],function(err,continueResults){
+                    if(continueResults.continue === 'y') {
+                        importLayer(preResults,userInput);
+                    }
+                });
+            }
+        });
+    });
+}
+
+// actually perform the import
+function importLayer(preResults,userInput) {
+    postProcessor = PostProcessorFactory({
+        preResults: preResults,
+        userInput: userInput,
+        fork: argv.fork
+    });
+    postProcessor.on('error',handleError)
+                 .on('info',console.log)
+                 .on('complete',console.dir);
+    postProcessor.start();
+}
+
+function usage(msg) {
+    if(msg) {
+        console.error();
+        console.error(msg);
+    }
+    console.error();
+    console.error('add-layer [options] -f <inputFile>');
+    console.error('  options:');
+    console.error('            --layerName: the name of the layer to create (default: prompt)');
+    console.error('          --layerSource: the source of the data for this layer (e.g. web URL) (default: prompt)');
+    console.error('--featureNamingProperty: the feature property used to identify features within this layer (default: prompt)');
+    console.error('                 --fork: run work in separate processes (for testing).');
+    console.error('            --nocleanup: leave temporary files around (for testing).');
+    console.error();
+    console.error('  If layerName, layerSource and featureNamingProperty are all supplied then no user input will be necessary (i.e. unattended).');
+    console.error('  if you want to run strictly from command-line arguments but do not have a layerSource to identify specify --layerSource=none');
+    console.error();
     process.exit(1);
 }
 
@@ -15,26 +149,9 @@ function handleError(error) {
     process.exit(1);
 }
 
-if(!argv.f) {
-    console.error('missing required parameter.');
-    usage();
-}
-
-var preProcess = PreProcessorFactory({
-    filePath: argv.f,
-    fork: argv.fork
-});
-preProcess.on('error',handleError)
-.on('complete',function(results) {
-    console.log('COMPLETE');
-    console.dir(preProcess.results());
-    if(!argv.nocleanup) {
-        preProcess.cleanup(function(err){
-            if(err) {
-                console.error(err);
-            }
-            process.exit(err ? 1 :0);
-        });
+process.on('exit',function cleanup() {
+    if(preProcessor && !argv.nocleanup) {
+        preProcessor.cleanupSync();
+        preProcessor = undefined;
     }
 });
-preProcess.start();
