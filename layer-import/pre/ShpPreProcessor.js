@@ -26,7 +26,7 @@ class ShpPreProcessor extends PreProcessor {
             results = self.results(),
             out,
             coordError,
-            exampleProperties,
+            propertyCollector = self.propertyCollector(),
             featureCount = 0,
             cleanup = function(err) {
                 if(out) {
@@ -41,49 +41,19 @@ class ShpPreProcessor extends PreProcessor {
                     if(coordError) {
                         cleanup(coordError);
                     } else {
-                        results.properties = exampleProperties;
+                        results.exampleProperties = propertyCollector.exampleProperties();
+                        results.uniqueProperties = propertyCollector.uniqueProperties();
                         results.featureCount = featureCount;
                         self.emit('complete',results);
                     }
                 });
-        function testFirstCoordPair(geometry) {
-            while(_.isArray(geometry) && !_.isNumber(geometry[0])) {
-                geometry = geometry[0];
-            }
-            if(geometry.length !== 2) {
-                return new Error('Expected two coordinates but found '+geometry.length);
-            }
-            var x = Math.abs(geometry[0]),
-                y = Math.abs(geometry[1]);
-            if(x > 180 || y > 180) {
-                return new Error('Coordinates out of range ['+x+','+y+']');
-            }
-        }
-        function collectProperties(props) {
-            if(!exampleProperties) {
-                return exampleProperties = Object.keys(props).reduce(function(map,key){
-                    if(!!props[key]) { // weed out null
-                        map[key] = props[key];
-                    }
-                    return map;
-                },{});
-            }
-            // exampleProperties should be the intersection of all feature
-            // properties (those consistently found among all features)
-            var epKeys = Object.keys(exampleProperties);
-            Object.keys(props).forEach(function(key) {
-                if(!exampleProperties[key]/* null */ || epKeys.indexOf(key) === -1) {
-                    delete exampleProperties[key];
-                }
-            });
-        }
 
         function writeNewlineDelimitedFeatures(source) {
             return source.read().then(function repeat(result) {
-                if(result.done || (coordError = testFirstCoordPair(result.value.geometry.coordinates))) {
+                if(result.done || (coordError = self.testFirstCoordPair(result.value.geometry.coordinates))) {
                     return;
                 }
-                collectProperties(result.value.properties);
+                propertyCollector.collect(result.value.properties);
                 out.write(JSON.stringify(result.value));
                 out.write("\n");
                 featureCount++;
