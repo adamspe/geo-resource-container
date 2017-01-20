@@ -80,7 +80,7 @@ function gatherUserInput(preResults) {
         message: 'You must specify one of '+Object.keys(preResults.uniqueProperties).join(', '),
         required: true,
         conform: function(v) {
-            return Object.keys(preResults.uniqueProperties).indexOf(v) !== -1;
+            return preResults.uniqueProperties.indexOf(v) !== -1;
         }
     },{
         name: 'featureNamingProperty',
