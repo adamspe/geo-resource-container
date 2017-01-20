@@ -1,11 +1,16 @@
 #!/usr/bin/env node --preserve-symlinks
 var argv = require('minimist')(process.argv.slice(2)),
+    AppContainer = require('app-container'),
     layerImport = require('../layer-import'),
     PreProcessorFactory = layerImport.PreProcessorFactory,
     PostProcessorFactory = layerImport.PostProcessorFactory,
     prompt = require('prompt'),
     preProcessor,
     postProcessor;
+
+// deal with any possible duplicate argument names
+argv.user = argv.user||argv.u;
+argv.password = argv.password||argv.p;
 
 prompt.override = argv;
 
@@ -16,6 +21,8 @@ if(argv.h || argv.help) {
 if(!argv.f) {
     usage('missing required parameter.');
 }
+
+
 
 // start the ball rolling
 preProcessGeoInput();
@@ -131,15 +138,48 @@ function gatherUserInput(preResults) {
 
 // actually perform the import
 function importLayer(preResults,userInput) {
-    postProcessor = PostProcessorFactory({
-        preResults: preResults,
-        userInput: userInput,
-        fork: argv.fork
-    });
-    postProcessor.on('error',handleError)
-                 .on('info',console.log)
-                 .on('complete',console.dir);
-    postProcessor.start();
+    function login(u,p) {
+        AppContainer.login(u,p,function(err,user) {
+            if(err) {
+                handleError(err);
+            }
+            if(!user.isAdmin()) {
+                console.error('%s is not an administrator account.',user.email);
+                process.exit(1);
+            }
+            // clear out any passwords that may have been supplied
+            delete userInput.password;
+            delete userInput.p;
+            delete userInput.u;
+            userInput.userId = user._id.toString();
+            postProcessor = PostProcessorFactory({
+                preResults: preResults,
+                userInput: userInput,
+                fork: argv.fork
+            });
+            postProcessor.on('error',handleError)
+                         .on('info',console.log)
+                         .on('complete',console.dir);
+            postProcessor.start();
+        });
+    }
+    if(argv.user && argv.password) {
+        login(argv.user,argv.password);
+    } else {
+        prompt.get([{
+            name: 'user',
+            description: 'Username/E-mail',
+            required: true
+        },{
+            name: 'password',
+            description: 'Password',
+            hidden: true,
+            replace: '*',
+            required: true
+        }],function(err,upResults) {
+            login(upResults.user,upResults.password);
+        });
+    }
 }
 
 function usage(msg) {
@@ -150,15 +190,22 @@ function usage(msg) {
     console.error();
     console.error('add-layer [options] -f <inputFile>');
     console.error('  options:');
-    console.error('            --layerName: the name of the layer to create (default: prompt)');
-    console.error('          --layerSource: the source of the data for this layer (e.g. web URL) (default: prompt)');
-    console.error('    --featureIdProperty: the feature property used to uniquely identify features within this layer (default: prompt)');
-    console.error('                         it is important you pick a property that will remain consistent historically so this layer can be updated if/when things change');
-    console.error('--featureNamingProperty: the feature property used to name features within this layer (default: prompt)');
-    console.error('                 --fork: run work in separate processes (for testing).');
-    console.error('            --nocleanup: leave temporary files around (for testing).');
+    console.error('               --help, -h: display this usage message and exit');
     console.error();
-    console.error('  If layerName, layerSource and featureNamingProperty are all supplied then no user input will be necessary (i.e. unattended).');
+    console.error('               --user, -u: the username to login to the system with (admin role required) (default: prompt)');
+    console.error('           --password, -p: the password for --user (default prompt)')
+    console.error();
+    console.error('              --layerName: the name of the layer to create (default: prompt)');
+    console.error('            --layerSource: the source of the data for this layer (e.g. web URL) (default: prompt)');
+    console.error('      --featureIdProperty: the feature property used to uniquely identify features within this layer (default: prompt)');
+    console.error('                           it is important you pick a property that will remain consistent historically so this layer can be updated if/when things change');
+    console.error('  --featureNamingProperty: the feature property used to name features within this layer (default: prompt)');
+    console.error();
+    console.error('  testing options:');
+    console.error('                   --fork: run work in separate processes (for testing).');
+    console.error('              --nocleanup: leave temporary files around (for testing).');
+    console.error();
+    console.error('  If all standard command-line options are supplied then no user input will be necessary (i.e. unattended).');
     console.error('  if you want to run strictly from command-line arguments but do not have a layerSource to identify specify --layerSource=none');
     console.error();
     process.exit(1);
