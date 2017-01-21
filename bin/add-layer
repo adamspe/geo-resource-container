@@ -1,7 +1,7 @@
 #!/usr/bin/env node --preserve-symlinks
 var argv = require('minimist')(process.argv.slice(2)),
     AppContainer = require('app-container'),
-    layerImport = require('../layer-import'),
+    layerImport = require('../lib/layer-import'),
     PreProcessorFactory = layerImport.PreProcessorFactory,
     PostProcessorFactory = layerImport.PostProcessorFactory,
     prompt = require('prompt'),
@@ -84,7 +84,7 @@ function gatherUserInput(preResults) {
     },{
         name: 'featureIdProperty',
         description: 'What property name should be used to identify each feature?',
-        message: 'You must specify one of '+Object.keys(preResults.uniqueProperties).join(', '),
+        message: 'You must specify one of '+preResults.uniqueProperties.join(', '),
         required: true,
         conform: function(v) {
             return preResults.uniqueProperties.indexOf(v) !== -1;
