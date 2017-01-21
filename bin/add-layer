@@ -41,15 +41,15 @@ function preProcessGeoInput() {
 // gather user input
 function gatherUserInput(preResults) {
     // if all required input is on the commandline then no need to prompt
-    if(argv.layerName && argv.featureNamingProperty && argv.featureIdProperty && argv.layerSource) {
+    if(argv.layerName && argv.featureNameProperty && argv.featureIdProperty && argv.layerSource) {
         if(argv.layerSource === 'none') {
             delete argv.layerSource;
         }
         var validProperties = Object.keys(preResults.exampleProperties),
             uniqueProperties = Object.keys(preResults.uniqueProperties);
-        if(validProperties.indexOf(argv.featureNamingProperty) === -1) {
+        if(validProperties.indexOf(argv.featureNameProperty) === -1) {
             console.error();
-            console.error('The feature naming property "%s" is not a valid.',argv.featureNamingProperty);
+            console.error('The feature naming property "%s" is not a valid.',argv.featureNameProperty);
             console.error();
             console.error('It must be one of; %s',validProperties.join(', '));
             console.error();
@@ -90,7 +90,7 @@ function gatherUserInput(preResults) {
             return preResults.uniqueProperties.indexOf(v) !== -1;
         }
     },{
-        name: 'featureNamingProperty',
+        name: 'featureNameProperty',
         description: 'What property name should be used to name each feature?',
         message: 'You must specify one of '+Object.keys(preResults.exampleProperties).join(', '),
         required: true,
@@ -104,7 +104,7 @@ function gatherUserInput(preResults) {
     }], function(err,userInput){
         console.log();
         console.log('Your new layer will contain %d features (assuming they can be indexed) and be named "%s"',preResults.featureCount,userInput.layerName);
-        console.log('Each layer will be identified by the value of its "%s" property.',userInput.featureNamingProperty);
+        console.log('Each layer will be identified by the value of its "%s" property.',userInput.featureNameProperty);
         if(!userInput.layerSource) {
             delete userInput.layerSource;
             console.log('You opted to not identify the source of this layer\'s data');
@@ -199,7 +199,7 @@ function usage(msg) {
     console.error('            --layerSource: the source of the data for this layer (e.g. web URL) (default: prompt)');
     console.error('      --featureIdProperty: the feature property used to uniquely identify features within this layer (default: prompt)');
     console.error('                           it is important you pick a property that will remain consistent historically so this layer can be updated if/when things change');
-    console.error('  --featureNamingProperty: the feature property used to name features within this layer (default: prompt)');
+    console.error('  --featureNameProperty: the feature property used to name features within this layer (default: prompt)');
     console.error();
     console.error('  testing options:');
     console.error('                   --fork: run work in separate processes (for testing).');
