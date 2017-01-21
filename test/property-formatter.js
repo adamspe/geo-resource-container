@@ -23,6 +23,23 @@ describe('Property Formatter',function(){
         done();
     });
 
+    it('null',function(done){
+        var pf = new PropertyFormatter('%s[: %s],A,B');
+        var v = pf.format({
+            A: 'foo',
+            B: null
+        }).should.equal('foo');
+        done();
+    });
+
+    it('non greedy',function(done){
+        (new PropertyFormatter('%s (%s),A,B')).format({
+            A: 'foo',
+            B: 'bar'
+        }).should.equal('foo (bar)');
+        done();
+    });
+
     it('negative: fmt mismatch',function(done) {
         try {
             var p = new PropertyFormatter('%s[: %s][: %s],a,b');

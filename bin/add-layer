@@ -4,6 +4,7 @@ var argv = require('minimist')(process.argv.slice(2)),
     layerImport = require('../lib/layer-import'),
     PreProcessorFactory = layerImport.PreProcessorFactory,
     PostProcessorFactory = layerImport.PostProcessorFactory,
+    PropertyFormatter = require('../lib/property-formatter'),
     prompt = require('prompt'),
     preProcessor,
     postProcessor;
@@ -40,29 +41,37 @@ function preProcessGeoInput() {
 
 // gather user input
 function gatherUserInput(preResults) {
+    function testFormatter(fmt) {
+        try {
+            (new PropertyFormatter(fmt)).format(preResults.exampleProperties);
+        } catch (error) {
+            return error;
+        }
+    }
+    function formatterConform(v) {
+        var error = testFormatter(v);
+        if(error) {
+            console.error(error);
+            return false;
+        }
+        return true;
+    }
     // if all required input is on the commandline then no need to prompt
-    if(argv.layerName && argv.featureNameProperty && argv.featureIdProperty && argv.layerSource) {
+    if(argv.layerName && argv.featureNameFmt && argv.featureIdFmt && argv.layerSource) {
         if(argv.layerSource === 'none') {
             delete argv.layerSource;
         }
-        var validProperties = Object.keys(preResults.exampleProperties),
-            uniqueProperties = Object.keys(preResults.uniqueProperties);
-        if(validProperties.indexOf(argv.featureNameProperty) === -1) {
-            console.error();
-            console.error('The feature naming property "%s" is not a valid.',argv.featureNameProperty);
-            console.error();
-            console.error('It must be one of; %s',validProperties.join(', '));
-            console.error();
-            process.exit(1);
-        }
-        if(!uniqueProperties.indexOf(argv.featureIdProperty) === -1) {
-            console.error();
-            console.error('The feature id property "%s" is not a valid.',argv.featureIdProperty);
-            console.error();
-            console.error('It must be one of; %s',uniqueProperties.join(', '));
-            console.error();
-            process.exit(1);
-        }
+        ['featureIdFmt','featureNameFmt'].forEach((key) => {
+            var error = testFormatter(argv[key]);
+            if(error) {
+                console.error();
+                console.error('invalid %s',key);
+                console.error();
+                console.error(error);
+                console.error();
+                process.exit(1);
+            }
+        });
         return importLayer(preResults,argv);
     }
     console.log();
@@ -70,41 +79,35 @@ function gatherUserInput(preResults) {
     console.log('All features consistently contain the following property names with values.');
     console.log(' (the values are examples collected from the feature input)');
     console.log();
-    Object.keys(preResults.exampleProperties).forEach(function(key){
-        console.log('%s: %s',key,preResults.exampleProperties[key]);
+    Object.keys(preResults.examplePropertiesAnnotated).forEach(function(key){
+        console.log('%s: %s',key,preResults.examplePropertiesAnnotated[key]);
     });
-    console.log();
-    console.log('The following is a list of properties that are unique among all features and may be appropriate for identifying features.');
-    console.log(preResults.uniqueProperties.join(', '));
     console.log();
     prompt.get([{
         name: 'layerName',
         description: 'What should this layer be named?',
         required: true
     },{
-        name: 'featureIdProperty',
-        description: 'What property name should be used to identify each feature?',
-        message: 'You must specify one of '+preResults.uniqueProperties.join(', '),
+        name: 'featureIdFmt',
+        description: 'Feature Id format?',
+        message: 'Invalid property format',
         required: true,
-        conform: function(v) {
-            return preResults.uniqueProperties.indexOf(v) !== -1;
-        }
+        conform: formatterConform
     },{
-        name: 'featureNameProperty',
-        description: 'What property name should be used to name each feature?',
-        message: 'You must specify one of '+Object.keys(preResults.exampleProperties).join(', '),
+        name: 'featureNameFmt',
+        description: 'Feature Name format?',
+        message: 'Invalid property format',
         required: true,
-        conform: function(v) {
-            return Object.keys(preResults.exampleProperties).indexOf(v) !== -1;
-        }
+        conform: formatterConform
     },{
         name: 'layerSource',
         description: 'Where did the data for this layer originate (e.g. web URL)?',
         required: false
     }], function(err,userInput){
         console.log();
-        console.log('Your new layer will contain %d features (assuming they can be indexed) and be named "%s"',preResults.featureCount,userInput.layerName);
-        console.log('Each layer will be identified by the value of its "%s" property.',userInput.featureNameProperty);
+        console.log('Your new layer will contain %d features (assuming they can be indexed).',preResults.featureCount);
+        console.log('Example Feature Id "%s"',(new PropertyFormatter(userInput.featureIdFmt).format(preResults.exampleProperties)));
+        console.log('Example Feature Name "%s"',(new PropertyFormatter(userInput.featureNameFmt).format(preResults.exampleProperties)));
         if(!userInput.layerSource) {
             delete userInput.layerSource;
             console.log('You opted to not identify the source of this layer\'s data');
@@ -192,18 +195,18 @@ function usage(msg) {
     console.error('  options:');
     console.error('               --help, -h: display this usage message and exit');
     console.error();
-    console.error('               --user, -u: the username to login to the system with (admin role required) (default: prompt)');
-    console.error('           --password, -p: the password for --user (default prompt)')
+    console.error('          --user, -u: the username to login to the system with (admin role required) (default: prompt)');
+    console.error('      --password, -p: the password for --user (default prompt)')
     console.error();
-    console.error('              --layerName: the name of the layer to create (default: prompt)');
-    console.error('            --layerSource: the source of the data for this layer (e.g. web URL) (default: prompt)');
-    console.error('      --featureIdProperty: the feature property used to uniquely identify features within this layer (default: prompt)');
-    console.error('                           it is important you pick a property that will remain consistent historically so this layer can be updated if/when things change');
-    console.error('  --featureNameProperty: the feature property used to name features within this layer (default: prompt)');
+    console.error('         --layerName: the name of the layer to create (default: prompt)');
+    console.error('       --layerSource: the source of the data for this layer (e.g. web URL) (default: prompt)');
+    console.error('      --featureIdFmt: the feature property used to uniquely identify features within this layer (default: prompt)');
+    console.error('                      it is important you pick a property that will remain consistent historically so this layer can be updated if/when things change');
+    console.error('    --featureNameFmt: the feature property used to name features within this layer (default: prompt)');
     console.error();
     console.error('  testing options:');
-    console.error('                   --fork: run work in separate processes (for testing).');
-    console.error('              --nocleanup: leave temporary files around (for testing).');
+    console.error('              --fork: run work in separate processes (for testing).');
+    console.error('         --nocleanup: leave temporary files around (for testing).');
     console.error();
     console.error('  If all standard command-line options are supplied then no user input will be necessary (i.e. unattended).');
     console.error('  if you want to run strictly from command-line arguments but do not have a layerSource to identify specify --layerSource=none');
