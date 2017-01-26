@@ -4,6 +4,7 @@ var mongoose = require('mongoose'),
         source: {type: String},
         featureIdFmt: {type: String, required: true},
         featureNameFmt: {type: String, required: true},
+        _sourceFile: {type: mongoose.Schema.Types.ObjectId, ref: 'File'},
         _createdBy: {type: mongoose.Schema.Types.ObjectId, ref: 'User'},
         _modifiedBy: {type: mongoose.Schema.Types.ObjectId, ref: 'User'}
     });

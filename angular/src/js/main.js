@@ -1,6 +1,7 @@
 angular.module('app-container-geo',[
     'app-container-common',
-    'templates-app-container-geo'
+    'templates-app-container-geo',
+    'app-container-geo.admin'
 ])
 .service('Layer',['$appService',function($appService) {
     var Layer = $appService('geo/layer/:id');

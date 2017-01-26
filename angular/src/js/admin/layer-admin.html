@@ -1,0 +1,8 @@
+<h1>Layer Administration</h1>
+<ul>
+    <li ng-repeat="f in files.list">
+        <a href ng-click="update(f)">{{f.filename}} ({{f.metadata.index}})</a>
+        <a href ng-click="remove(f)">X</a>
+    </li>
+</ul>
+<input type="file" file-model="fileToUpload" file-resource="fileResource" />

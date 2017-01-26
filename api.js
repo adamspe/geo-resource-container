@@ -34,12 +34,33 @@ features = new Resource({
 
 layers = new Resource({
     rel: prefix+'layer',
-    model: require('./models/Layer')
+    model: require('./models/Layer'),
+    populate:['_sourceFile']
 })
 .instanceLink('features',{
     otherSide: features,
     key: '_layer'
 });
+
+// file resources can be in another container so unfortunately we
+// cannot refer to the resource's mapper directly without creating one
+// so create its _links like it would
+var filePrefix = (conf.get('resources:$apiRoot')||'/api/v1/')+'file/file/';
+layers.getMapper = (function(superFunc){
+    return function(postMapper) {
+        var mapper = superFunc.apply(layers,arguments);
+        return function(o,i,arr){
+            var o = mapper(o,i,arr);
+            if(o._sourceFile) {
+                o._sourceFile._links = {
+                    self: filePrefix+o._sourceFile._id,
+                    download: filePrefix+o._sourceFile._id+'/download/'+o._sourceFile.filename
+                };
+            }
+            return o;
+        };
+    };
+})(layers.getMapper);
 
 module.exports.featuresResource = features;
 module.exports.layersResource = layers;
