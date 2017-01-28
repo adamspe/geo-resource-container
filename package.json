@@ -24,6 +24,7 @@
     "path": "^0.12.7",
     "prompt": "^1.0.0",
     "shapefile": "^0.5.10",
+    "sprintf-js": "^1.0.3",
     "unzip": "^0.1.11"
   },
   "devDependencies": {

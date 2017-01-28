@@ -47,7 +47,10 @@ module.exports = function(grunt){
                     banner: '<%= meta.banner %>\n',
                     srcMap: true
                 },
-                src: [], // list generated in build.
+                src: [
+                    'node_modules/sprintf-js/dist/sprintf.min.js',
+                    '../lib/property-formatter/index.js'
+                ], // list generated in build.
                 dest: '<%= dist %>/<%= filename %>.js'
             }
         },

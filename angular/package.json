@@ -13,5 +13,8 @@
     "grunt-html2js": "0.3.x",
     "grunt-htmlhint": "0.9.x",
     "matchdep": "^1.0.1"
+  },
+  "dependencies": {
+    "sprintf-js": "^1.0.3"
   }
 }
