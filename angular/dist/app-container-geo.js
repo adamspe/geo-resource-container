@@ -1,60 +1,156 @@
 /*
  * app-container-geo
- * Version: 1.0.0 - 2017-01-26
+ * Version: 1.0.0 - 2017-01-28
  */
 
 angular.module('app-container-geo.admin',[
     'app-container-file'
 ])
-.directive('layerAdmin',['$log','Layer','File','FileMeta','NotificationService',function($log,Layer,File,FileMeta,NotificationService){
+.directive('layerCreateInputForm',[function(){
+    return {
+        restrict: 'C',
+        templateUrl: 'js/admin/layer-create-input-form.html'
+    };
+}])
+.directive('exampleLayerProperties',[function(){
+    return {
+        restrict: 'AEC',
+        template: '<h4>Example Feature Properties '+
+        '<i uib-popover-template="\'js/admin/layer-create-eprops-popover.html\'" '+
+        'popover-placement="auto bottom" '+
+        'class="fa fa-info-circle" aria-hidden="true"></i>'+
+        '</h4><table class="table table-striped table-condensed">'+
+        '<tr><th>Property</th><th>Value</th><th>Type</th><th></th></tr>'+
+        '<tr ng-repeat="(prop,pinfo) in preResults.examplePropertiesAnnotated">'+
+        '<td>{{prop}}</td><td>{{pinfo.value}}</td><td>{{pinfo.type}}</td>'+
+        '<td><i uib-tooltip="Unique" ng-if="pinfo.unique" class="fa fa-key" aria-hidden="true"></i></td>'+
+        '</tr>'+
+        '</table>'
+    };
+}])
+.controller('LayerCreateCtrl',['$scope','$log','$timeout','$uibModalInstance','WebSocketConnection','File','NotificationService',function($scope,$log,$timeout,$uibModalInstance,WebSocketConnection,File,NotificationService) {
+    var STATES = $scope.STATES = {
+        HANDSHAKE: 'HANDSHAKE',
+        FILE_UPLOAD: 'FILE_UPLOAD',
+        PRE_PROCESS_RUNNING: 'PRE_PROCESS_RUNNING',
+        USER_INPUT: 'USER_INPUT'
+    },
+    STATE,
+    STATE_DATA;
+    $scope.infoMessages = [];
+
+    $scope.dismiss = function() {
+        function goaway() {
+            $uibModalInstance.dismiss();
+        }
+        if($scope.uploadedFile) {
+            // cleanup, they're dismissing
+            $log.debug('dismiss, cleaning up',$scope.uploadedFile);
+            $scope.uploadedFile.$remove({id: $scope.uploadedFile._id},goaway,NotificationService.addError);
+        } else {
+            goaway();
+        }
+    };
+
+    var wsc = new WebSocketConnection('geo/initLayer',function(){
+        $log.debug('connection to geo/initLayer established.');
+        $scope.$on('$destroy',wsc.connectionCloser());
+        wsc.onMessage(function(msg){
+            $scope.$apply(function(){
+                $log.debug('Message (current state:'+STATE+')',msg);
+                switch(msg.key) {
+                    case 'state':
+                        STATE = $scope.STATE = STATES[msg.toState];
+                        STATE_DATA = $scope.STATE_DATA = msg.data;
+                        break;
+                    case 'error':
+                        $log.error(msg.data);
+                        break;
+                    case 'info':
+                        $log.debug('info: ',msg.data);
+                        $scope.infoMessages.push(msg.data);
+                        break;
+                    case 'complete':
+                        break;
+                    default:
+                        $log.error('unexpected message');
+                        break;
+                }
+            });
+        });
+        $timeout(function(){
+             STATE = $scope.STATE = STATES.HANDSHAKE;
+        },1000);
+    });
+
+    $scope.$watch('STATE',function(state){
+        if(state) {
+            $log.debug('Entered state ',state);
+            switch(state) {
+                case STATES.HANDSHAKE:
+                    wsc.send({key:'state',currentState: STATES.HANDSHAKE});
+                    break;
+                case STATES.USER_INPUT:
+                    $scope.preResults = STATE_DATA;
+                    break;
+            }
+        }
+    });
+
+    $scope.fileResource = File;
+    $scope.$watch('fileToUpload',function(file) {
+        console.log('fileToUpload',file);
+        if(file && file.file && file.$save) {
+            file.metadata = {
+                type: 'layerSource'
+            };
+            file.$save(function(f){
+                $scope.uploadedFile = f;
+                delete $scope.fileToUpload;
+            });
+        }
+    });
+    $scope.$watch('uploadedFile',function(file){
+        if(file) {
+            $log.debug('uploadedFile',file);
+            if(file.contentType !== 'application/zip') {
+                $log.debug('File is not a zip, deleting.');
+                NotificationService.addError({statusText: file.fileName+' is not a zip file.'});
+                file.$remove({id: file._id},function(){
+                    $log.debug('removed '+file.fileName);
+                    delete $scope.uploadedFile;
+                },NotificationService.addError);
+            } else {
+                $log.debug('Notifying server of new file, start pre-processing');
+                wsc.send({key:'state',currentState:STATE,data:file._id});
+            }
+        }
+    });
+
+}])
+.directive('layerAdmin',['$log','Layer','NotificationService','$uibModal',function($log,Layer,NotificationService,$uibModal){
     return {
         restrict: 'E',
         templateUrl: 'js/admin/layer-admin.html',
         scope: {},
         link: function($scope,$element,$attrs) {
-            function listFiles() {
-                $scope.files = File.query({});
+            function listLayers() {
+                $scope.layers = Layer.query({});
             }
-            listFiles();
+            listLayers();
 
-            $scope.fileResource = File;
-            $scope.$watch('fileToUpload',function(file) {
-                console.log('fileToUpload',file);
-                if(file && file.file && file.$save) {
-                    file.metadata = {
-                        index: 0,
-                        foo: 'bar',
-                        bool: true
-                    };
-                    file.$save(function(f){
-                        $scope.uploadedFile = f;
-                        delete $scope.fileToUpload;
-                        listFiles();
-                    });
-                }
-            });
-            $scope.$watch('uploadedFile',function(file){
-                if(file) {
-                    if(file.contentType !== 'application/zip') {
-                        NotificationService.addError({statusText: file.fileName+' is not a zip file.'});
-                        file.$remove({id: file._id},function(){
-                            $log.debug('removed '+file.fileName);
-                            delete $scope.uploadedFile;
-                        },NotificationService.addError);
-                    }
-                    console.log('uploadedFile',file);
-                }
-            });
-            $scope.update = function(f) {
-                var file = new File(angular.extend({},f));
-                file.metadata.index++;
-                file.$update({id: f._id},listFiles);
-            };
-            $scope.remove = function(f) {
-                (new File(f)).$remove({id: f._id},function(){
-                    $log.debug('removed '+f.fileName);
-                    listFiles();
-                },NotificationService.addError);
+            $scope.createLayer = function() {
+                $uibModal.open({
+                    templateUrl: 'js/admin/layer-create.html',
+                    controller: 'LayerCreateCtrl',
+                    windowClass: 'layer-create',
+                    size: 'lg',
+                    backdrop: 'static',
+                    keyboard: false
+                }).result.then(function(){
+                    $log.debug('layer creation dialog ok');
+                    listLayers();
+                });
             };
         }
     };
@@ -285,17 +381,98 @@ angular.module('app-container-geo',[
     return MapLayer;
 }]);
 
-angular.module('templates-app-container-geo', ['js/admin/layer-admin.html']);
+angular.module('templates-app-container-geo', ['js/admin/layer-admin.html', 'js/admin/layer-create-eprops-popover.html', 'js/admin/layer-create-input-form.html', 'js/admin/layer-create.html']);
 
 angular.module("js/admin/layer-admin.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("js/admin/layer-admin.html",
     "<h1>Layer Administration</h1>\n" +
+    "<button class=\"btn btn-default\" ng-click=\"createLayer()\">New Layer</button>\n" +
     "<ul>\n" +
-    "    <li ng-repeat=\"f in files.list\">\n" +
-    "        <a href ng-click=\"update(f)\">{{f.filename}} ({{f.metadata.index}})</a>\n" +
-    "        <a href ng-click=\"remove(f)\">X</a>\n" +
+    "    <li ng-repeat=\"l in layers.list\">\n" +
+    "        <label>{{l.name}}</label>\n" +
+    "        {{l._sourceFile.filename}}\n" +
     "    </li>\n" +
     "</ul>\n" +
-    "<input type=\"file\" file-model=\"fileToUpload\" file-resource=\"fileResource\" />\n" +
+    "");
+}]);
+
+angular.module("js/admin/layer-create-eprops-popover.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("js/admin/layer-create-eprops-popover.html",
+    "<div>\n" +
+    "    <p>The properties below represent the superset of all available properties\n" +
+    "        across all features within your new layer.  Displayed values are pulled\n" +
+    "        from first feature to have the given property set.</p>\n" +
+    "\n" +
+    "    <p>Properties flagged with the <i class=\"fa fa-key\" aria-hidden=\"true\"></i>\n" +
+    "        icon have values that are unique across all features within your new layer.</p>\n" +
+    "\n" +
+    "    <p>If a property has an explicit type (e.g. <code>string</code>,<code>number</code>\n" +
+    "        or <code>boolean</code>) then this indicates the property is available\n" +
+    "        on all features and has a consistent type across them.</p>\n" +
+    "\n" +
+    "    <p>A property type of <code>mixed</code> almost certainly indicates that\n" +
+    "        property in question is either unset or is <code>null</code>\n" +
+    "        for some features.</p>\n" +
+    "</div>\n" +
+    "");
+}]);
+
+angular.module("js/admin/layer-create-input-form.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("js/admin/layer-create-input-form.html",
+    "<form>\n" +
+    "    <div class=\"form-group\">\n" +
+    "        <label for=\"inputFile\">Source File</label>\n" +
+    "        <div id=\"inputFile\" class=\"file-info\" file=\"uploadedFile\"></div>\n" +
+    "    </div>\n" +
+    "    <div class=\"form-group\">\n" +
+    "        <label for=\"layerName\">Layer Name *</label>\n" +
+    "        <input id=\"layerName\" type=\"text\" class=\"form-control\"\n" +
+    "               ng-model=\"userInput.layerName\" required />\n" +
+    "    </div>\n" +
+    "    <div class=\"form-group\">\n" +
+    "        <label for=\"featureIdFmt\">Feature Id Format *</label>\n" +
+    "        <input id=\"featureIdFmt\" type=\"text\" class=\"form-control\"\n" +
+    "               ng-model=\"userInput.featureIdFmt\" required />\n" +
+    "    </div>\n" +
+    "    <div class=\"form-group\">\n" +
+    "        <label for=\"featureNameFmt\">Feature Id Format *</label>\n" +
+    "        <input id=\"featureNameFmt\" type=\"text\" class=\"form-control\"\n" +
+    "               ng-model=\"userInput.featureNameFmt\" required />\n" +
+    "    </div>\n" +
+    "    <div class=\"form-group\">\n" +
+    "        <label for=\"layerSource\">Layer Source</label>\n" +
+    "        <input id=\"layerSource\" type=\"url\" class=\"form-control\"\n" +
+    "               ng-model=\"userInput.layerSource\" />\n" +
+    "    </div>\n" +
+    "</form>\n" +
+    "");
+}]);
+
+angular.module("js/admin/layer-create.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("js/admin/layer-create.html",
+    "<div class=\"clearfix modal-header\">\n" +
+    "    <ul class=\"list-inline pull-right\">\n" +
+    "        <li class=\"spinner\" is-working=\"!STATE || [STATE.FILE_UPLOAD,STATE.USER_INPUT].indexOf(STATE) !== -1\"></li>\n" +
+    "        <li><a href class=\"pull-right\" ng-click=\"dismiss()\"><i class=\"fa fa-times-circle-o fa-2x\"></i></a></li>\n" +
+    "    </ul>\n" +
+    "\n" +
+    "    <h2>Create Layer</h2>\n" +
+    "</div>\n" +
+    "<div class=\"clearfix modal-body\">\n" +
+    "    <p ng-if=\"!STATE\">Waiting to establish connection...</p>\n" +
+    "\n" +
+    "    <div ng-show=\"STATE === STATES.FILE_UPLOAD\">\n" +
+    "        <p>Start by uploading the source of your layer (currently only zipped shapfile).</p>\n" +
+    "        <input type=\"file\" file-model=\"fileToUpload\" file-resource=\"fileResource\" />\n" +
+    "    </div>\n" +
+    "\n" +
+    "    <div ng-show=\"STATE === STATES.USER_INPUT\">\n" +
+    "        <div class=\"example-layer-properties\"></div>\n" +
+    "        <p>Your new layer will have <mark>{{preResults.featureCount}}</mark> features (assuming they can all\n" +
+    "            be successfully indexed).</p>\n" +
+    "        <div class=\"layer-create-input-form\"></div>\n" +
+    "        <pre>{{preResults | json}}</pre>\n" +
+    "    </div>\n" +
+    "</div>\n" +
     "");
 }]);

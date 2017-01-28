@@ -1,0 +1,26 @@
+<form>
+    <div class="form-group">
+        <label for="inputFile">Source File</label>
+        <div id="inputFile" class="file-info" file="uploadedFile"></div>
+    </div>
+    <div class="form-group">
+        <label for="layerName">Layer Name *</label>
+        <input id="layerName" type="text" class="form-control"
+               ng-model="userInput.layerName" required />
+    </div>
+    <div class="form-group">
+        <label for="featureIdFmt">Feature Id Format *</label>
+        <input id="featureIdFmt" type="text" class="form-control"
+               ng-model="userInput.featureIdFmt" required />
+    </div>
+    <div class="form-group">
+        <label for="featureNameFmt">Feature Id Format *</label>
+        <input id="featureNameFmt" type="text" class="form-control"
+               ng-model="userInput.featureNameFmt" required />
+    </div>
+    <div class="form-group">
+        <label for="layerSource">Layer Source</label>
+        <input id="layerSource" type="url" class="form-control"
+               ng-model="userInput.layerSource" />
+    </div>
+</form>

@@ -80,7 +80,8 @@ function gatherUserInput(preResults) {
     console.log(' (the values are examples collected from the feature input)');
     console.log();
     Object.keys(preResults.examplePropertiesAnnotated).forEach(function(key){
-        console.log('%s: %s',key,preResults.examplePropertiesAnnotated[key]);
+        var o = preResults.examplePropertiesAnnotated[key];
+        console.log('%s: %s [type: %s, unique: %b]',key,o.value,o.type,o.unique);
     });
     console.log();
     prompt.get([{

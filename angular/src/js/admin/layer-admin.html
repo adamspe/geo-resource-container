@@ -1,8 +1,8 @@
 <h1>Layer Administration</h1>
+<button class="btn btn-default" ng-click="createLayer()">New Layer</button>
 <ul>
-    <li ng-repeat="f in files.list">
-        <a href ng-click="update(f)">{{f.filename}} ({{f.metadata.index}})</a>
-        <a href ng-click="remove(f)">X</a>
+    <li ng-repeat="l in layers.list">
+        <label>{{l.name}}</label>
+        {{l._sourceFile.filename}}
     </li>
 </ul>
-<input type="file" file-model="fileToUpload" file-resource="fileResource" />

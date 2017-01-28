@@ -1,0 +1,24 @@
+<div class="clearfix modal-header">
+    <ul class="list-inline pull-right">
+        <li class="spinner" is-working="!STATE || [STATE.FILE_UPLOAD,STATE.USER_INPUT].indexOf(STATE) !== -1"></li>
+        <li><a href class="pull-right" ng-click="dismiss()"><i class="fa fa-times-circle-o fa-2x"></i></a></li>
+    </ul>
+
+    <h2>Create Layer</h2>
+</div>
+<div class="clearfix modal-body">
+    <p ng-if="!STATE">Waiting to establish connection...</p>
+
+    <div ng-show="STATE === STATES.FILE_UPLOAD">
+        <p>Start by uploading the source of your layer (currently only zipped shapfile).</p>
+        <input type="file" file-model="fileToUpload" file-resource="fileResource" />
+    </div>
+
+    <div ng-show="STATE === STATES.USER_INPUT">
+        <div class="example-layer-properties"></div>
+        <p>Your new layer will have <mark>{{preResults.featureCount}}</mark> features (assuming they can all
+            be successfully indexed).</p>
+        <div class="layer-create-input-form"></div>
+        <pre>{{preResults | json}}</pre>
+    </div>
+</div>
