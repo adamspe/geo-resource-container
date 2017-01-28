@@ -19,6 +19,9 @@
             be successfully indexed).</p>
         <div class="layer-create-input-form clearfix"></div>
         <div class="example-layer-properties"></div>
-        <pre>{{preResults | json}}</pre>
+    </div>
+
+    <div ng-if="STATE === STATES.COMPLETE && userInput">
+        Layer {{userInput.layerName}} added.
     </div>
 </div>

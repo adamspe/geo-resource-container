@@ -13,7 +13,8 @@ var debug = require('debug')('geo-resource-container'),
         HANDSHAKE: 'HANDSHAKE',
         FILE_UPLOAD: 'FILE_UPLOAD',
         PRE_PROCESS_RUNNING: 'PRE_PROCESS_RUNNING',
-        USER_INPUT: 'USER_INPUT'
+        USER_INPUT: 'USER_INPUT',
+        COMPLETE: 'COMPLETE'
     },
     File = require('odata-resource-file').File;;
 
@@ -40,6 +41,8 @@ module.exports = function(container){
         }
         var tmpFolder,
             preProcessor,
+            preResults,
+            userInput,
             postProcessor;
         ws.on('close',function(){
             debug('WebSocket closed [%s]',req.user.email);
@@ -63,7 +66,6 @@ module.exports = function(container){
                             moveClientTostate(STATES.FILE_UPLOAD);
                             break;
                         case STATES.FILE_UPLOAD:
-                            debug('TODO pre-process file id',msg.data);
                             File.findById(msg.data).exec(function(err,file){
                                 if(err) {
                                     console.error(err);
@@ -87,7 +89,8 @@ module.exports = function(container){
                                             fork: conf.get('forkWorkers')
                                         });
                                         preProcessor.on('error',sendError)
-                                                    .on('complete',function(preResults){
+                                                    .on('complete',function(results){
+                                                        preResults = results;
                                                         preResults._sourceFile = file._id;
                                                         moveClientTostate(STATES.USER_INPUT,preResults);
                                                     });
@@ -97,6 +100,22 @@ module.exports = function(container){
                                 });
 
                             });
+                            break;
+                        case STATES.USER_INPUT:
+                            userInput = msg.data;
+                            userInput.userId = req.user._id.toString();
+                            postProcessor = PostProcessorFactory({
+                                preResults: preResults,
+                                userInput: userInput,
+                                fork: conf.get('forkWorkers')
+                            });
+                            postProcessor.on('error',sendError)
+                                         .on('info',sendInfo)
+                                         .on('complete',function(results){
+                                             debug('initLayer.results',results);
+                                             moveClientTostate(STATES.COMPLETE,results);
+                                         });
+                            postProcessor.start();
                             break;
                     }
                     break;

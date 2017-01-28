@@ -73,8 +73,7 @@
         module.exports = PropertyFormatter;
         debug = require('debug')('property-formatter');
         formatter = require('sprintf-js').sprintf;
-    }
-    if(typeof(window) !== 'undefined'){
+    } else if(typeof(window) !== 'undefined'){
         window.PropertyFormatter = PropertyFormatter;
         debug = function(){};
         formatter = window.sprintf; // must be included by browser client
@@ -174,7 +173,8 @@ angular.module('app-container-geo.admin',[
         HANDSHAKE: 'HANDSHAKE',
         FILE_UPLOAD: 'FILE_UPLOAD',
         PRE_PROCESS_RUNNING: 'PRE_PROCESS_RUNNING',
-        USER_INPUT: 'USER_INPUT'
+        USER_INPUT: 'USER_INPUT',
+        COMPLETE: 'COMPLETE'
     },
     STATE,
     STATE_DATA;
@@ -237,6 +237,11 @@ angular.module('app-container-geo.admin',[
 
                     };
                     break;
+                case STATES.COMPLETE:
+                    $timeout(function(){
+                        $uibModalInstance.close();
+                    },2000);
+                    break;
             }
         }
     });
@@ -270,6 +275,10 @@ angular.module('app-container-geo.admin',[
             }
         }
     });
+
+    $scope.add = function() {
+        wsc.send({key:'state',currentState:STATE,data:$scope.userInput});
+    };
 
 }])
 .directive('layerAdmin',['$log','Layer','NotificationService','$uibModal',function($log,Layer,NotificationService,$uibModal){
@@ -623,7 +632,7 @@ angular.module("js/admin/layer-create-input-form.html", []).run(["$templateCache
     "    </div>\n" +
     "    <ul class=\"list-inline pull-right\">\n" +
     "        <li><button class=\"btn btn-default\" ng-click=\"dismiss()\">Cancel</button></li>\n" +
-    "        <li><button class=\"btn btn-default\" ng-click=\"create()\" ng-disabled=\"newLayerForm.$invalid\">Create</button></li>\n" +
+    "        <li><button class=\"btn btn-default\" ng-click=\"add()\" ng-disabled=\"newLayerForm.$invalid\">Create</button></li>\n" +
     "    </ul>\n" +
     "</form>\n" +
     "");
@@ -688,7 +697,10 @@ angular.module("js/admin/layer-create.html", []).run(["$templateCache", function
     "            be successfully indexed).</p>\n" +
     "        <div class=\"layer-create-input-form clearfix\"></div>\n" +
     "        <div class=\"example-layer-properties\"></div>\n" +
-    "        <pre>{{preResults | json}}</pre>\n" +
+    "    </div>\n" +
+    "\n" +
+    "    <div ng-if=\"STATE === STATES.COMPLETE && userInput\">\n" +
+    "        Layer {{userInput.layerName}} added.\n" +
     "    </div>\n" +
     "</div>\n" +
     "");

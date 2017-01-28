@@ -91,7 +91,8 @@ angular.module('app-container-geo.admin',[
         HANDSHAKE: 'HANDSHAKE',
         FILE_UPLOAD: 'FILE_UPLOAD',
         PRE_PROCESS_RUNNING: 'PRE_PROCESS_RUNNING',
-        USER_INPUT: 'USER_INPUT'
+        USER_INPUT: 'USER_INPUT',
+        COMPLETE: 'COMPLETE'
     },
     STATE,
     STATE_DATA;
@@ -154,6 +155,11 @@ angular.module('app-container-geo.admin',[
 
                     };
                     break;
+                case STATES.COMPLETE:
+                    $timeout(function(){
+                        $uibModalInstance.close();
+                    },2000);
+                    break;
             }
         }
     });
@@ -187,6 +193,10 @@ angular.module('app-container-geo.admin',[
             }
         }
     });
+
+    $scope.add = function() {
+        wsc.send({key:'state',currentState:STATE,data:$scope.userInput});
+    };
 
 }])
 .directive('layerAdmin',['$log','Layer','NotificationService','$uibModal',function($log,Layer,NotificationService,$uibModal){
