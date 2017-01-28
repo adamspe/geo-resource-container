@@ -1,26 +1,41 @@
-<form>
+<form name="newLayerForm" ng-if="userInput && preResults">
     <div class="form-group">
         <label for="inputFile">Source File</label>
         <div id="inputFile" class="file-info" file="uploadedFile"></div>
     </div>
     <div class="form-group">
-        <label for="layerName">Layer Name *</label>
+        <div class="text-danger pull-right" ng-if="newLayerForm.$error.layerNameinUse.length">
+            The layer name &quot;{{newLayerForm.$error.layerNameinUse[0].$viewValue}}&quot; is already in use.
+        </div>
+        <label for="layerName">Layer Name <i uib-popover-template="'js/admin/layer-create-lname-popover.html'" popover-placement="auto right" class="fa fa-info-circle" aria-hidden="true"></i> *</label>
         <input id="layerName" type="text" class="form-control"
-               ng-model="userInput.layerName" required />
+               ng-model="userInput.layerName" layer-name-validate required />
     </div>
     <div class="form-group">
-        <label for="featureIdFmt">Feature Id Format *</label>
+        <div class="text-danger pull-right" ng-if="newLayerForm.$error.userInput_featureIdFmt_propertyFormat.length">
+            Invalid format
+        </div>
+        <label for="featureIdFmt">Feature Id Format <i uib-popover-template="'js/admin/layer-create-idfmt-popover.html'" popover-placement="auto right" class="fa fa-info-circle" aria-hidden="true"></i> *</label>
         <input id="featureIdFmt" type="text" class="form-control"
-               ng-model="userInput.featureIdFmt" required />
+               ng-model="userInput.featureIdFmt"
+               property-format-validate="preResults.exampleProperties" required />
     </div>
     <div class="form-group">
-        <label for="featureNameFmt">Feature Id Format *</label>
+        <div class="text-danger pull-right" ng-if="newLayerForm.$error.userInput_featureNameFmt_propertyFormat.length">
+            Invalid format
+        </div>
+        <label for="featureNameFmt">Feature Name Format <i uib-popover-template="'js/admin/layer-create-nmfmt-popover.html'" popover-placement="auto right" class="fa fa-info-circle" aria-hidden="true"></i> *</label>
         <input id="featureNameFmt" type="text" class="form-control"
-               ng-model="userInput.featureNameFmt" required />
+               ng-model="userInput.featureNameFmt"
+               property-format-validate="preResults.exampleProperties" required />
     </div>
     <div class="form-group">
-        <label for="layerSource">Layer Source</label>
+        <label for="layerSource">Layer Source <i uib-popover-template="'js/admin/layer-create-lsource-popover.html'" popover-placement="auto right" class="fa fa-info-circle" aria-hidden="true"></i> </label>
         <input id="layerSource" type="url" class="form-control"
                ng-model="userInput.layerSource" />
     </div>
+    <ul class="list-inline pull-right">
+        <li><button class="btn btn-default" ng-click="dismiss()">Cancel</button></li>
+        <li><button class="btn btn-default" ng-click="create()" ng-disabled="newLayerForm.$invalid">Create</button></li>
+    </ul>
 </form>

@@ -88,6 +88,7 @@ module.exports = function(container){
                                         });
                                         preProcessor.on('error',sendError)
                                                     .on('complete',function(preResults){
+                                                        preResults._sourceFile = file._id;
                                                         moveClientTostate(STATES.USER_INPUT,preResults);
                                                     });
                                         moveClientTostate(STATES.PRE_PROCESS_RUNNING);

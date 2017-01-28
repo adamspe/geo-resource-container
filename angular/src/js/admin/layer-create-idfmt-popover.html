@@ -1,0 +1,17 @@
+<div>
+    <p>Each feature added to the system must have an id that identifies it uniquely
+        within its layer.</p>
+    <p>If this layer is updated in the future (e.g. boundaries re-defined) it may be
+        desireable to allow the feature data to be updated in place rather than
+        recreated.  For example if other entities are to be associated with a given feature
+        to prevent data integrity problems.</p>
+    <p>The property format syntax is basic <code>sprintf</code> format without <thead>
+        surrounding <code>&quot;</code> characters.  Unlike standard <code>sprintf</code>
+        you can wrap optional properties in <code>[]</code>.</p>
+    <p><em>Example:</em> If your features had a unique property, <code>GEOID</code> that
+        is guaranteed to remain constant moving forward you could specify a format
+        like <code>%s,GEOID</code>.</p>
+    <p><em>Example:</em> If your features had two properties then when put together
+        would guarantee uniqueness, and remain constant moving forward, you could
+        specify a format like <code>%s.%s,MAINID,SUBID</code>.</p>
+</div>

@@ -1,6 +1,69 @@
 angular.module('app-container-geo.admin',[
     'app-container-file'
 ])
+.directive('propertyFormatValidate',['$log','$q','$parse','$window',function($log,$q,$parse,$window){
+    return {
+        require: 'ngModel',
+        link: function($scope,$element,$attrs,$ctrl){
+            var PropertyFormatter = $window.PropertyFormatter,
+                exampleProperties = $parse($attrs.propertyFormatValidate)($scope);
+            $log.debug('propertyFormatValidate.exampleProperties',exampleProperties);
+            if(exampleProperties) {
+                $ctrl.$asyncValidators[$attrs.ngModel.replace('.','_')+'_propertyFormat'] = function(modelValue,newValue) {
+                    $log.debug('modelValue="'+modelValue+'" newValue="'+newValue+'"');
+                    var def = $q.defer(),fmt;
+                    if(newValue) {
+                        try {
+                            fmt = (new PropertyFormatter(newValue)).format(exampleProperties);
+                            $log.debug('format string ok',fmt);
+                            def.resolve(true);
+                        } catch(err) {
+                            $log.debug('format error',err);
+                            def.reject();
+                        }
+                    } else {
+                        def.reject(); // required so OK
+                    }
+                    return def.promise;
+                };
+            }
+        }
+    };
+}])
+.directive('layerNameValidate',['$log','$q','$timeout','Layer',function($log,$q,$timeout,Layer){
+    return {
+        require: 'ngModel',
+        link: function($scope,$element,$attrs,$ctrl){
+            var $t_promise;
+            $ctrl.$asyncValidators['layerNameinUse'] = function(modelValue,newValue) {
+                $log.debug('modelValue="'+modelValue+'" newValue="'+newValue+'"');
+                if($t_promise) {
+                    $timeout.cancel($t_promise);
+                    $t_promise = undefined;
+                }
+                var def = $q.defer();
+                if(newValue) {
+                    // only fire after 1/2 sec to avoid lots of beating on
+                    // the server
+                    $t_promise = $timeout(function(){
+                        Layer.query({
+                            $filter: 'name eq \''+newValue+'\''
+                        },function(layers){
+                            if(layers.list.length === 0) {
+                                def.resolve(true);
+                            } else {
+                                def.reject();
+                            }
+                        });
+                    },500);
+                } else {
+                    def.reject(); // required so OK
+                }
+                return def.promise;
+            };
+        }
+    };
+}])
 .directive('layerCreateInputForm',[function(){
     return {
         restrict: 'C',
@@ -87,6 +150,9 @@ angular.module('app-container-geo.admin',[
                     break;
                 case STATES.USER_INPUT:
                     $scope.preResults = STATE_DATA;
+                    $scope.userInput = {
+
+                    };
                     break;
             }
         }

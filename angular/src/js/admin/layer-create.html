@@ -4,7 +4,7 @@
         <li><a href class="pull-right" ng-click="dismiss()"><i class="fa fa-times-circle-o fa-2x"></i></a></li>
     </ul>
 
-    <h2>Create Layer</h2>
+    <h2>Add Layer</h2>
 </div>
 <div class="clearfix modal-body">
     <p ng-if="!STATE">Waiting to establish connection...</p>
@@ -15,10 +15,10 @@
     </div>
 
     <div ng-show="STATE === STATES.USER_INPUT">
-        <div class="example-layer-properties"></div>
         <p>Your new layer will have <mark>{{preResults.featureCount}}</mark> features (assuming they can all
             be successfully indexed).</p>
-        <div class="layer-create-input-form"></div>
+        <div class="layer-create-input-form clearfix"></div>
+        <div class="example-layer-properties"></div>
         <pre>{{preResults | json}}</pre>
     </div>
 </div>

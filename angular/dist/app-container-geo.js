@@ -79,11 +79,74 @@
         debug = function(){};
         formatter = window.sprintf; // must be included by browser client
     }
-}).call(typeof(window) === 'undefined' ? this : window);
+})(typeof(window) === 'undefined' ? this : window);
 
 angular.module('app-container-geo.admin',[
     'app-container-file'
 ])
+.directive('propertyFormatValidate',['$log','$q','$parse','$window',function($log,$q,$parse,$window){
+    return {
+        require: 'ngModel',
+        link: function($scope,$element,$attrs,$ctrl){
+            var PropertyFormatter = $window.PropertyFormatter,
+                exampleProperties = $parse($attrs.propertyFormatValidate)($scope);
+            $log.debug('propertyFormatValidate.exampleProperties',exampleProperties);
+            if(exampleProperties) {
+                $ctrl.$asyncValidators[$attrs.ngModel.replace('.','_')+'_propertyFormat'] = function(modelValue,newValue) {
+                    $log.debug('modelValue="'+modelValue+'" newValue="'+newValue+'"');
+                    var def = $q.defer(),fmt;
+                    if(newValue) {
+                        try {
+                            fmt = (new PropertyFormatter(newValue)).format(exampleProperties);
+                            $log.debug('format string ok',fmt);
+                            def.resolve(true);
+                        } catch(err) {
+                            $log.debug('format error',err);
+                            def.reject();
+                        }
+                    } else {
+                        def.reject(); // required so OK
+                    }
+                    return def.promise;
+                };
+            }
+        }
+    };
+}])
+.directive('layerNameValidate',['$log','$q','$timeout','Layer',function($log,$q,$timeout,Layer){
+    return {
+        require: 'ngModel',
+        link: function($scope,$element,$attrs,$ctrl){
+            var $t_promise;
+            $ctrl.$asyncValidators['layerNameinUse'] = function(modelValue,newValue) {
+                $log.debug('modelValue="'+modelValue+'" newValue="'+newValue+'"');
+                if($t_promise) {
+                    $timeout.cancel($t_promise);
+                    $t_promise = undefined;
+                }
+                var def = $q.defer();
+                if(newValue) {
+                    // only fire after 1/2 sec to avoid lots of beating on
+                    // the server
+                    $t_promise = $timeout(function(){
+                        Layer.query({
+                            $filter: 'name eq \''+newValue+'\''
+                        },function(layers){
+                            if(layers.list.length === 0) {
+                                def.resolve(true);
+                            } else {
+                                def.reject();
+                            }
+                        });
+                    },500);
+                } else {
+                    def.reject(); // required so OK
+                }
+                return def.promise;
+            };
+        }
+    };
+}])
 .directive('layerCreateInputForm',[function(){
     return {
         restrict: 'C',
@@ -170,6 +233,9 @@ angular.module('app-container-geo.admin',[
                     break;
                 case STATES.USER_INPUT:
                     $scope.preResults = STATE_DATA;
+                    $scope.userInput = {
+
+                    };
                     break;
             }
         }
@@ -459,7 +525,7 @@ angular.module('app-container-geo',[
     return MapLayer;
 }]);
 
-angular.module('templates-app-container-geo', ['js/admin/layer-admin.html', 'js/admin/layer-create-eprops-popover.html', 'js/admin/layer-create-input-form.html', 'js/admin/layer-create.html']);
+angular.module('templates-app-container-geo', ['js/admin/layer-admin.html', 'js/admin/layer-create-eprops-popover.html', 'js/admin/layer-create-idfmt-popover.html', 'js/admin/layer-create-input-form.html', 'js/admin/layer-create-lname-popover.html', 'js/admin/layer-create-lsource-popover.html', 'js/admin/layer-create-nmfmt-popover.html', 'js/admin/layer-create.html']);
 
 angular.module("js/admin/layer-admin.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("js/admin/layer-admin.html",
@@ -495,34 +561,107 @@ angular.module("js/admin/layer-create-eprops-popover.html", []).run(["$templateC
     "");
 }]);
 
+angular.module("js/admin/layer-create-idfmt-popover.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("js/admin/layer-create-idfmt-popover.html",
+    "<div>\n" +
+    "    <p>Each feature added to the system must have an id that identifies it uniquely\n" +
+    "        within its layer.</p>\n" +
+    "    <p>If this layer is updated in the future (e.g. boundaries re-defined) it may be\n" +
+    "        desireable to allow the feature data to be updated in place rather than\n" +
+    "        recreated.  For example if other entities are to be associated with a given feature\n" +
+    "        to prevent data integrity problems.</p>\n" +
+    "    <p>The property format syntax is basic <code>sprintf</code> format without <thead>\n" +
+    "        surrounding <code>&quot;</code> characters.  Unlike standard <code>sprintf</code>\n" +
+    "        you can wrap optional properties in <code>[]</code>.</p>\n" +
+    "    <p><em>Example:</em> If your features had a unique property, <code>GEOID</code> that\n" +
+    "        is guaranteed to remain constant moving forward you could specify a format\n" +
+    "        like <code>%s,GEOID</code>.</p>\n" +
+    "    <p><em>Example:</em> If your features had two properties then when put together\n" +
+    "        would guarantee uniqueness, and remain constant moving forward, you could\n" +
+    "        specify a format like <code>%s.%s,MAINID,SUBID</code>.</p>\n" +
+    "</div>\n" +
+    "");
+}]);
+
 angular.module("js/admin/layer-create-input-form.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("js/admin/layer-create-input-form.html",
-    "<form>\n" +
+    "<form name=\"newLayerForm\" ng-if=\"userInput && preResults\">\n" +
     "    <div class=\"form-group\">\n" +
     "        <label for=\"inputFile\">Source File</label>\n" +
     "        <div id=\"inputFile\" class=\"file-info\" file=\"uploadedFile\"></div>\n" +
     "    </div>\n" +
     "    <div class=\"form-group\">\n" +
-    "        <label for=\"layerName\">Layer Name *</label>\n" +
+    "        <div class=\"text-danger pull-right\" ng-if=\"newLayerForm.$error.layerNameinUse.length\">\n" +
+    "            The layer name &quot;{{newLayerForm.$error.layerNameinUse[0].$viewValue}}&quot; is already in use.\n" +
+    "        </div>\n" +
+    "        <label for=\"layerName\">Layer Name <i uib-popover-template=\"'js/admin/layer-create-lname-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i> *</label>\n" +
     "        <input id=\"layerName\" type=\"text\" class=\"form-control\"\n" +
-    "               ng-model=\"userInput.layerName\" required />\n" +
+    "               ng-model=\"userInput.layerName\" layer-name-validate required />\n" +
     "    </div>\n" +
     "    <div class=\"form-group\">\n" +
-    "        <label for=\"featureIdFmt\">Feature Id Format *</label>\n" +
+    "        <div class=\"text-danger pull-right\" ng-if=\"newLayerForm.$error.userInput_featureIdFmt_propertyFormat.length\">\n" +
+    "            Invalid format\n" +
+    "        </div>\n" +
+    "        <label for=\"featureIdFmt\">Feature Id Format <i uib-popover-template=\"'js/admin/layer-create-idfmt-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i> *</label>\n" +
     "        <input id=\"featureIdFmt\" type=\"text\" class=\"form-control\"\n" +
-    "               ng-model=\"userInput.featureIdFmt\" required />\n" +
+    "               ng-model=\"userInput.featureIdFmt\"\n" +
+    "               property-format-validate=\"preResults.exampleProperties\" required />\n" +
     "    </div>\n" +
     "    <div class=\"form-group\">\n" +
-    "        <label for=\"featureNameFmt\">Feature Id Format *</label>\n" +
+    "        <div class=\"text-danger pull-right\" ng-if=\"newLayerForm.$error.userInput_featureNameFmt_propertyFormat.length\">\n" +
+    "            Invalid format\n" +
+    "        </div>\n" +
+    "        <label for=\"featureNameFmt\">Feature Name Format <i uib-popover-template=\"'js/admin/layer-create-nmfmt-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i> *</label>\n" +
     "        <input id=\"featureNameFmt\" type=\"text\" class=\"form-control\"\n" +
-    "               ng-model=\"userInput.featureNameFmt\" required />\n" +
+    "               ng-model=\"userInput.featureNameFmt\"\n" +
+    "               property-format-validate=\"preResults.exampleProperties\" required />\n" +
     "    </div>\n" +
     "    <div class=\"form-group\">\n" +
-    "        <label for=\"layerSource\">Layer Source</label>\n" +
+    "        <label for=\"layerSource\">Layer Source <i uib-popover-template=\"'js/admin/layer-create-lsource-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i> </label>\n" +
     "        <input id=\"layerSource\" type=\"url\" class=\"form-control\"\n" +
     "               ng-model=\"userInput.layerSource\" />\n" +
     "    </div>\n" +
+    "    <ul class=\"list-inline pull-right\">\n" +
+    "        <li><button class=\"btn btn-default\" ng-click=\"dismiss()\">Cancel</button></li>\n" +
+    "        <li><button class=\"btn btn-default\" ng-click=\"create()\" ng-disabled=\"newLayerForm.$invalid\">Create</button></li>\n" +
+    "    </ul>\n" +
     "</form>\n" +
+    "");
+}]);
+
+angular.module("js/admin/layer-create-lname-popover.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("js/admin/layer-create-lname-popover.html",
+    "<div>\n" +
+    "    Specify your layer name here.  Your layer name must be unique within the system.\n" +
+    "</div>\n" +
+    "");
+}]);
+
+angular.module("js/admin/layer-create-lsource-popover.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("js/admin/layer-create-lsource-popover.html",
+    "<div>\n" +
+    "    <p>It may be useful to keep track of where the source of this layer originated.\n" +
+    "    If you downloaded the data from a web address you can record that here.</p>\n" +
+    "</div>\n" +
+    "");
+}]);
+
+angular.module("js/admin/layer-create-nmfmt-popover.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("js/admin/layer-create-nmfmt-popover.html",
+    "<div>\n" +
+    "    <p>Each feature added to the system should have a friendly name to identify it.\n" +
+    "        Feature names are generated from each feature's properties.</p>\n" +
+    "    <p>The property format syntax is basic <code>sprintf</code> format without <thead>\n" +
+    "        surrounding <code>&quot;</code> characters.  Unlike standard <code>sprintf</code>\n" +
+    "        you can wrap optional properties in <code>[]</code>.</p>\n" +
+    "    <p><em>Example:</em> If your features had a unique property, <code>UNITNAME</code> that\n" +
+    "        is guaranteed to remain constant moving forward you could specify a format\n" +
+    "        like <code>%s,UNITNAME</code>.</p>\n" +
+    "    <p><em>Example:</em> If your features had two properties then when put together\n" +
+    "        would create a more meaningful feature name, but one of the two properties\n" +
+    "        is not always available (not unique, type <code>mixed</code>), you might\n" +
+    "        specify a format like <code>%s[ (%s)],UNITNAME,SUBUNITNAME</code>.</p>\n" +
+    "</div>\n" +
     "");
 }]);
 
@@ -534,7 +673,7 @@ angular.module("js/admin/layer-create.html", []).run(["$templateCache", function
     "        <li><a href class=\"pull-right\" ng-click=\"dismiss()\"><i class=\"fa fa-times-circle-o fa-2x\"></i></a></li>\n" +
     "    </ul>\n" +
     "\n" +
-    "    <h2>Create Layer</h2>\n" +
+    "    <h2>Add Layer</h2>\n" +
     "</div>\n" +
     "<div class=\"clearfix modal-body\">\n" +
     "    <p ng-if=\"!STATE\">Waiting to establish connection...</p>\n" +
@@ -545,10 +684,10 @@ angular.module("js/admin/layer-create.html", []).run(["$templateCache", function
     "    </div>\n" +
     "\n" +
     "    <div ng-show=\"STATE === STATES.USER_INPUT\">\n" +
-    "        <div class=\"example-layer-properties\"></div>\n" +
     "        <p>Your new layer will have <mark>{{preResults.featureCount}}</mark> features (assuming they can all\n" +
     "            be successfully indexed).</p>\n" +
-    "        <div class=\"layer-create-input-form\"></div>\n" +
+    "        <div class=\"layer-create-input-form clearfix\"></div>\n" +
+    "        <div class=\"example-layer-properties\"></div>\n" +
     "        <pre>{{preResults | json}}</pre>\n" +
     "    </div>\n" +
     "</div>\n" +
