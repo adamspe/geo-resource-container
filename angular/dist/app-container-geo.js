@@ -1,6 +1,6 @@
 /*
  * app-container-geo
- * Version: 1.0.0 - 2017-01-28
+ * Version: 1.0.0 - 2017-01-29
  */
 
 /*! sprintf-js | Alexandru Marasteanu <hello@alexei.ro> (http://alexei.ro/) | BSD-3-Clause */
@@ -538,14 +538,24 @@ angular.module('templates-app-container-geo', ['js/admin/layer-admin.html', 'js/
 
 angular.module("js/admin/layer-admin.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("js/admin/layer-admin.html",
-    "<h1>Layer Administration</h1>\n" +
-    "<button class=\"btn btn-default\" ng-click=\"createLayer()\">New Layer</button>\n" +
-    "<ul>\n" +
-    "    <li ng-repeat=\"l in layers.list\">\n" +
-    "        <label>{{l.name}}</label>\n" +
-    "        {{l._sourceFile.filename}}\n" +
-    "    </li>\n" +
-    "</ul>\n" +
+    "<pane-set unique-id=\"layer-admin\" open-heading-cols=\"4\">\n" +
+    "    <pane-set-header>\n" +
+    "        <div class=\"pane-set-title\" title=\"Layer Administration\"></div>\n" +
+    "    </pane-set-header>\n" +
+    "    <pane-set-footer>\n" +
+    "        <button class=\"btn btn-default pull-right\" ng-click=\"createLayer()\">New Layer</button>\n" +
+    "    </pane-set-footer>\n" +
+    "\n" +
+    "    <pane ng-repeat=\"l in layers.list\" unique-id=\"pane-{{l._id}}\">\n" +
+    "        <pane-heading>\n" +
+    "            <h4>{{l.name}}</h4>\n" +
+    "            <div class=\"file-info\" file=\"l._sourceFile\"></div>\n" +
+    "        </pane-heading>\n" +
+    "        <div>\n" +
+    "            <h4>TODO map, etc. for {{l.name}}</h4>\n" +
+    "        </div>\n" +
+    "    </pane>\n" +
+    "</pane-set>\n" +
     "");
 }]);
 
@@ -579,7 +589,7 @@ angular.module("js/admin/layer-create-idfmt-popover.html", []).run(["$templateCa
     "        desireable to allow the feature data to be updated in place rather than\n" +
     "        recreated.  For example if other entities are to be associated with a given feature\n" +
     "        to prevent data integrity problems.</p>\n" +
-    "    <p>The property format syntax is basic <code>sprintf</code> format without <thead>\n" +
+    "    <p>The property format syntax is basic <code>sprintf</code> format without\n" +
     "        surrounding <code>&quot;</code> characters.  Unlike standard <code>sprintf</code>\n" +
     "        you can wrap optional properties in <code>[]</code>.</p>\n" +
     "    <p><em>Example:</em> If your features had a unique property, <code>GEOID</code> that\n" +
@@ -660,7 +670,7 @@ angular.module("js/admin/layer-create-nmfmt-popover.html", []).run(["$templateCa
     "<div>\n" +
     "    <p>Each feature added to the system should have a friendly name to identify it.\n" +
     "        Feature names are generated from each feature's properties.</p>\n" +
-    "    <p>The property format syntax is basic <code>sprintf</code> format without <thead>\n" +
+    "    <p>The property format syntax is basic <code>sprintf</code> format without\n" +
     "        surrounding <code>&quot;</code> characters.  Unlike standard <code>sprintf</code>\n" +
     "        you can wrap optional properties in <code>[]</code>.</p>\n" +
     "    <p><em>Example:</em> If your features had a unique property, <code>UNITNAME</code> that\n" +

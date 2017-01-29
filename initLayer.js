@@ -113,7 +113,9 @@ module.exports = function(container){
                                          .on('info',sendInfo)
                                          .on('complete',function(results){
                                              debug('initLayer.results',results);
-                                             moveClientTostate(STATES.COMPLETE,results);
+                                             setTimeout(function(){
+                                                moveClientTostate(STATES.COMPLETE,results);
+                                             },2000);
                                          });
                             postProcessor.start();
                             break;
