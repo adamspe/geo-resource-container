@@ -9,6 +9,16 @@ var mongoose = require('mongoose'),
         _modifiedBy: {type: mongoose.Schema.Types.ObjectId, ref: 'User'}
     });
 
+schema.post('remove',function(layer){
+    // go cleanup associated features
+    var Feature = require('./Feature');
+    Feature.remove({_layer: layer._id},function(err){
+        if(err) {
+            console.error(err);
+        }
+    });
+});
+
 schema.set('collection','Layer');
 
 var Layer = mongoose.model('Layer',schema);

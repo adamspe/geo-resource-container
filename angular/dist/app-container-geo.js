@@ -1,6 +1,6 @@
 /*
  * app-container-geo
- * Version: 1.0.0 - 2017-01-29
+ * Version: 1.0.0 - 2017-01-31
  */
 
 /*! sprintf-js | Alexandru Marasteanu <hello@alexei.ro> (http://alexei.ro/) | BSD-3-Clause */
@@ -281,7 +281,7 @@ angular.module('app-container-geo.admin',[
     };
 
 }])
-.directive('layerAdmin',['$log','Layer','NotificationService','$uibModal','PaneStateService',function($log,Layer,NotificationService,$uibModal,PaneStateService){
+.directive('layerAdmin',['$log','Layer','NotificationService','DialogService','$uibModal','PaneStateService',function($log,Layer,NotificationService,DialogService,$uibModal,PaneStateService){
     return {
         restrict: 'E',
         templateUrl: 'js/admin/layer-admin.html',
@@ -303,6 +303,17 @@ angular.module('app-container-geo.admin',[
                 }).result.then(function(){
                     $log.debug('layer creation dialog ok');
                     listLayers();
+                });
+            };
+            $scope.removeLayer = function(l) {
+                DialogService.confirm({
+                    question: 'Are you sure you want to delete '+l.name+'?',
+                    warning: 'This cannot be undone.'
+                }).then(function(){
+                    l.$remove({id: l._id},function(){
+                        NotificationService.addInfo('Removed '+l.name);
+                        listLayers();
+                    },NotificationService.addError);
                 });
             };
         }
@@ -660,6 +671,7 @@ angular.module("js/admin/layer-admin.html", []).run(["$templateCache", function(
     "        <pane-heading>\n" +
     "            <h4>{{l.name}}</h4>\n" +
     "            <div class=\"file-info\" file=\"l._sourceFile\"></div>\n" +
+    "            <a href ng-click=\"removeLayer(l)\">Remove layer</a>\n" +
     "        </pane-heading>\n" +
     "        <div ng-if=\"isPaneActive('pane-'+l._id)\">\n" +
     "            <div class=\"layer-admin-map\" layer=\"l\" />\n" +

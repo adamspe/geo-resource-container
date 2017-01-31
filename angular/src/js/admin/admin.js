@@ -199,7 +199,7 @@ angular.module('app-container-geo.admin',[
     };
 
 }])
-.directive('layerAdmin',['$log','Layer','NotificationService','$uibModal','PaneStateService',function($log,Layer,NotificationService,$uibModal,PaneStateService){
+.directive('layerAdmin',['$log','Layer','NotificationService','DialogService','$uibModal','PaneStateService',function($log,Layer,NotificationService,DialogService,$uibModal,PaneStateService){
     return {
         restrict: 'E',
         templateUrl: 'js/admin/layer-admin.html',
@@ -221,6 +221,17 @@ angular.module('app-container-geo.admin',[
                 }).result.then(function(){
                     $log.debug('layer creation dialog ok');
                     listLayers();
+                });
+            };
+            $scope.removeLayer = function(l) {
+                DialogService.confirm({
+                    question: 'Are you sure you want to delete '+l.name+'?',
+                    warning: 'This cannot be undone.'
+                }).then(function(){
+                    l.$remove({id: l._id},function(){
+                        NotificationService.addInfo('Removed '+l.name);
+                        listLayers();
+                    },NotificationService.addError);
                 });
             };
         }
