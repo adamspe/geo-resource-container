@@ -40,6 +40,56 @@ layers = new Resource({
 .instanceLink('features',{
     otherSide: features,
     key: '_layer'
+})
+.instanceLink('topojson',function(req,res){
+    var topology = require('topojson').topology;
+    // TODO - this current route is memory intensive
+    features.getModel().find({_layer: req._resourceId}).lean(true).exec(function(err,features){
+        if(err) {
+            return Resource.sendError(res,500,'error finding features.',err);
+        }
+        features.forEach(function(f){
+            f.data.properties._featureProps = Object.keys(f).reduce(function(map,key){
+                var val = f[key];
+                if(typeof(val) !== 'object') {
+                    map[key] = val;
+                }
+                return map;
+            },{
+                _links: {
+                    self: prefix+'feature/'+f._id
+                }
+            });
+        });
+        res.json(topology({
+            layer: {
+                type: "FeatureCollection",
+                features: features.map(function(f) { return f.data; })
+            }
+        },(req.query.q ? Number(req.query.q) : undefined)));
+    });
+    /* this doesn't work because topology will require all the GeoJson features at
+     * one time, duh, so alternatively ndJson could be written to disk and then geo2topo
+     * run on it and the results piped back.
+     stream = features.getModel().find({_layer: req._resourceId}).lean(true).stream();
+    res.type('application/json; charset=utf-8');
+    res.write('{"type":"Topology","objects":{"'+req._resourceId+'":{"type":"GeometryCollection","geometries":[');
+    var oneOut = false;
+    stream.on('data',function(feature){
+        var topo = topology({translated:{
+            type: "FeatureCollection",
+            features: [feature.data]
+        }});
+        if(oneOut) {
+            res.write(',');
+        }
+        feature.data.properties.featureId = feature.featureId;
+        feature.data.properties.featureName = feature.featureName;
+        res.write(JSON.stringify(feature.data));
+        oneOut = true;
+    }).on('close',function(){
+        res.end(']}}}');
+    });*/
 });
 
 // file resources can be in another container so unfortunately we

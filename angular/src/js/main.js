@@ -11,7 +11,7 @@ angular.module('app-container-geo',[
     var Feature = $appService('geo/feature/:id');
     return Feature;
 }])
-.factory('MapLayerService',['$q','MapLayer','Feature',function($q,MapLayer,Feature) {
+.factory('MapLayerService',['$q','$http','MapLayer','Feature',function($q,$http,MapLayer,Feature) {
     return {
         getForPoint: function(lat,lng) {
             var def = $q.defer();
@@ -27,20 +27,26 @@ angular.module('app-container-geo',[
             });
             return def.promise;
         },
-        getForLayer: function(layerOrId) {
-            var def = $q.defer(),
-                id = typeof(layerOrId) === 'string' ?
-                    layerOrId : (layerOrId && layerOrId._id ? layerOrId._id : undefined);
-            if(!id) {
-                def.reject('bad layerOrId');
-            } else {
-                // TODO - how many?
-                // write special service that will load all features within a layer
-                // translate that into topojson and have the client turn it back into GeoJson
-                Feature.query({$filter: '_layer eq \''+id+'\'',$top: 5000},function(response){
-                    def.resolve(new MapLayer(response.list));
-                });
-            }
+        getForLayer: function(layer,q) {
+            var def = $q.defer();
+            // using the topojson relationship to get a simplified version of
+            // the layer (smaller on the wire).  this doesn't solve the issue with
+            // layers that have huge numbers of polygons TODO
+            $http({
+                method: 'GET',
+                url: layer._links.topojson+'?q='+(q||'1e4')
+            }).then(function(response){
+                var topo = response.data,
+                    geoJson = topojson.feature(topo,topo.objects.layer);
+                def.resolve(new MapLayer(geoJson.features.map(function(f){
+                    // need to make geojson features look like feature resource objects
+                    var featureObj = angular.extend({},f.properties._featureProps);
+                    delete f.properties._featureProps;
+                    featureObj.data = f;
+                    featureObj._layer = layer;
+                    return featureObj;
+                })));
+            });
             return def.promise;
         }
     };

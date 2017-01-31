@@ -49,6 +49,7 @@ module.exports = function(grunt){
                 },
                 src: [
                     'node_modules/sprintf-js/dist/sprintf.min.js',
+                    'node_modules/topojson/dist/topojson.min.js',
                     '../lib/property-formatter/index.js'
                 ], // list generated in build.
                 dest: '<%= dist %>/<%= filename %>.js'
