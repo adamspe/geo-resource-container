@@ -11,8 +11,8 @@
             <h4>{{l.name}}</h4>
             <div class="file-info" file="l._sourceFile"></div>
         </pane-heading>
-        <div>
-            <h4>TODO map, etc. for {{l.name}}</h4>
+        <div ng-if="isPaneActive('pane-'+l._id)">
+            <div class="layer-admin-map" layer="l" />
         </div>
     </pane>
 </pane-set>

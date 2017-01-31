@@ -45,7 +45,7 @@ layers = new Resource({
 // file resources can be in another container so unfortunately we
 // cannot refer to the resource's mapper directly without creating one
 // so create its _links like it would
-var filePrefix = (conf.get('resources:$apiRoot')||'/api/v1/')+'file/file/';
+var filePrefix = (conf.get('resources:$apiRoot')||'/api/v1/')+'fs/file/';
 layers.getMapper = (function(superFunc){
     return function(postMapper) {
         var mapper = superFunc.apply(layers,arguments);

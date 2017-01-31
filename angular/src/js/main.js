@@ -26,6 +26,22 @@ angular.module('app-container-geo',[
                 def.resolve(new MapLayer([feature]));
             });
             return def.promise;
+        },
+        getForLayer: function(layerOrId) {
+            var def = $q.defer(),
+                id = typeof(layerOrId) === 'string' ?
+                    layerOrId : (layerOrId && layerOrId._id ? layerOrId._id : undefined);
+            if(!id) {
+                def.reject('bad layerOrId');
+            } else {
+                // TODO - how many?
+                // write special service that will load all features within a layer
+                // translate that into topojson and have the client turn it back into GeoJson
+                Feature.query({$filter: '_layer eq \''+id+'\'',$top: 5000},function(response){
+                    def.resolve(new MapLayer(response.list));
+                });
+            }
+            return def.promise;
         }
     };
 }])
