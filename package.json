@@ -25,6 +25,7 @@
     "prompt": "^1.0.0",
     "shapefile": "^0.5.10",
     "sprintf-js": "^1.0.3",
+    "topojson": "^2.2.0",
     "unzip": "^0.1.11"
   },
   "devDependencies": {

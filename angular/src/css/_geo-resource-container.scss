@@ -1,3 +1,8 @@
+layer-admin {
+    .panes .pane.contents a.contents-close {
+        right: -10px; // put the close icon out of the pane to the right
+    }
+}
 .layer-admin-map {
     .angular-google-map-container {
         position: absolute;
