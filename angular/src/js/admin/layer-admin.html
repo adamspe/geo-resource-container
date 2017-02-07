@@ -6,14 +6,14 @@
         <button class="btn btn-default pull-right" ng-click="createLayer()">New Layer</button>
     </pane-set-footer>
 
-    <pane ng-repeat="l in layers.list" unique-id="pane-{{l._id}}">
+    <pane ng-repeat="l in layers.list" unique-id="{{l._id}}">
         <pane-heading>
             <h4>{{l.name}}</h4>
             <div class="file-info" file="l._sourceFile"></div>
             <a href ng-click="removeLayer(l)">Remove layer</a>
         </pane-heading>
-        <div ng-if="isPaneActive('pane-'+l._id)">
-            <div class="layer-admin-map" layer="l" />
+        <div>
+            <div class="layer-admin-map" layer="l" ng-if="isPaneActive(l._id)"/>
         </div>
     </pane>
 </pane-set>

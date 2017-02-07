@@ -248,6 +248,7 @@ angular.module('app-container-geo.admin',[
         },
         link: function($scope,$elm,$attrs) {
             uiGmapGoogleMapApi.then(function(google_maps){
+                uiGmapIsReady.reset();
                 $scope.map = {
                     center: { latitude: 41.135760, longitude: -99.157679 },
                     zoom: 4,
@@ -293,18 +294,8 @@ angular.module('app-container-geo.admin',[
                         }
                     }*/
                 };
-                // ISSUE #1 : the 2 below is unfortunate.  for some reason that, after
-                // a great deal of debugging, i was unable to determine this directive
-                // gets loaded twice when its pane is opened, this means that the
-                // underlying code believes there should be two maps (presumably the
-                // first is discarded).
-                // this MUST be fixed because the result is two promises get fired
-                // and as a result the layer contents are fetched from the server
-                // twice...
-                // ISSUE #2 : each pane only works the first time it is opened, not the
-                // second...
-                uiGmapIsReady.promise(2).then(function(instances){
-                    var map = instances[1].map;
+                uiGmapIsReady.promise(1).then(function(instances){
+                    var map = instances[0].map;
                     map.data.addListener('mouseover',function(event){
                         map.data.overrideStyle(event.feature, {strokeWeight: 3});
                     });
@@ -321,11 +312,6 @@ angular.module('app-container-geo.admin',[
                     MapLayerService.getForLayer($scope.layer).then(function(mapLayer){
                         mapLayer.map(map).add();
                     });
-                    /*
-                    var fid = InitMapService.getInitFeatureId();
-                    if(fid) {
-                        MapLayerService.getForFeature(fid).then(layerSetter(map));
-                    }*/
                 });
             });
         }
