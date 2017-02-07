@@ -176,6 +176,7 @@ angular.module('app-container-geo.admin',[
         FILE_UPLOAD: 'FILE_UPLOAD',
         PRE_PROCESS_RUNNING: 'PRE_PROCESS_RUNNING',
         USER_INPUT: 'USER_INPUT',
+        POST_PROCESS_RUNNING: 'POST_PROCESS_RUNNING',
         COMPLETE: 'COMPLETE'
     },
     STATE,
@@ -211,7 +212,10 @@ angular.module('app-container-geo.admin',[
                         break;
                     case 'info':
                         $log.debug('info: ',msg.data);
-                        $scope.infoMessages.push(msg.data);
+                        $scope.infoMessages.splice(0,0,{
+                            cls: /^FAILED/.test(msg.data) ? 'error' : 'info',
+                            text: msg.data
+                        });
                         break;
                     case 'complete':
                         break;
@@ -240,9 +244,12 @@ angular.module('app-container-geo.admin',[
                     };
                     break;
                 case STATES.COMPLETE:
-                    $timeout(function(){
+                    // layer added, don't cleanup the file when the modal is dismissed.
+                    delete $scope.uploadedFile;
+                    // update dismiss to use close so the caller knows things went swimmingly
+                    $scope.dismiss = function() {
                         $uibModalInstance.close();
-                    },2000);
+                    };
                     break;
             }
         }
@@ -307,7 +314,8 @@ angular.module('app-container-geo.admin',[
                     listLayers();
                 });
             };
-            $scope.removeLayer = function(l) {
+            $scope.removeLayer = function(l,$event) {
+                $event.stopPropagation();
                 DialogService.confirm({
                     question: 'Are you sure you want to delete '+l.name+'?',
                     warning: 'This cannot be undone.'
@@ -665,7 +673,7 @@ angular.module("js/admin/layer-admin.html", []).run(["$templateCache", function(
     "        <pane-heading>\n" +
     "            <h4>{{l.name}}</h4>\n" +
     "            <div class=\"file-info\" file=\"l._sourceFile\"></div>\n" +
-    "            <a href ng-click=\"removeLayer(l)\">Remove layer</a>\n" +
+    "            <a href ng-click=\"removeLayer(l,$event)\">Remove layer</a>\n" +
     "        </pane-heading>\n" +
     "        <div>\n" +
     "            <div class=\"layer-admin-map\" layer=\"l\" ng-if=\"isPaneActive(l._id)\"/>\n" +
@@ -825,8 +833,12 @@ angular.module("js/admin/layer-create.html", []).run(["$templateCache", function
     "        <div class=\"example-layer-properties\"></div>\n" +
     "    </div>\n" +
     "\n" +
-    "    <div ng-if=\"STATE === STATES.COMPLETE && userInput\">\n" +
-    "        Layer {{userInput.layerName}} added.\n" +
+    "    <div ng-show=\"STATE === STATES.POST_PROCESS_RUNNING || (STATE === STATES.COMPLETE && userInput)\">\n" +
+    "        <ul class=\"list-unstyled layer-create-messages\">\n" +
+    "            <li ng-if=\"STATE === STATES.COMPLETE && userInput\">Layer {{userInput.layerName}} added.</li>\n" +
+    "            <li ng-repeat=\"msg in infoMessages\"><code class=\"{{msg.cls}}\">{{msg.text}}</code></li>\n" +
+    "        </ul>\n" +
+    "\n" +
     "    </div>\n" +
     "</div>\n" +
     "");

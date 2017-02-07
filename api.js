@@ -7,8 +7,8 @@ var Resource = require('odata-resource'),
 features = new Resource({
     rel: prefix+'feature',
     model: require('./models/Feature'),
-    $top: 10,
-    populate:['_layer']
+    populate:['_layer'],
+    count: true
 })
 .staticLink('containingPoint',function(req,res){
     var lat = parseFloat(req.query.lat),
@@ -35,7 +35,8 @@ features = new Resource({
 layers = new Resource({
     rel: prefix+'layer',
     model: require('./models/Layer'),
-    populate:['_sourceFile']
+    populate:['_sourceFile'],
+    count: true
 })
 .instanceLink('features',{
     otherSide: features,

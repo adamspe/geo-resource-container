@@ -10,7 +10,7 @@
         <pane-heading>
             <h4>{{l.name}}</h4>
             <div class="file-info" file="l._sourceFile"></div>
-            <a href ng-click="removeLayer(l)">Remove layer</a>
+            <a href ng-click="removeLayer(l,$event)">Remove layer</a>
         </pane-heading>
         <div>
             <div class="layer-admin-map" layer="l" ng-if="isPaneActive(l._id)"/>

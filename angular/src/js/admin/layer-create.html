@@ -21,7 +21,11 @@
         <div class="example-layer-properties"></div>
     </div>
 
-    <div ng-if="STATE === STATES.COMPLETE && userInput">
-        Layer {{userInput.layerName}} added.
+    <div ng-show="STATE === STATES.POST_PROCESS_RUNNING || (STATE === STATES.COMPLETE && userInput)">
+        <ul class="list-unstyled layer-create-messages">
+            <li ng-if="STATE === STATES.COMPLETE && userInput">Layer {{userInput.layerName}} added.</li>
+            <li ng-repeat="msg in infoMessages"><code class="{{msg.cls}}">{{msg.text}}</code></li>
+        </ul>
+
     </div>
 </div>

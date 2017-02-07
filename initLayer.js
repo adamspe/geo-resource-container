@@ -14,6 +14,7 @@ var debug = require('debug')('geo-resource-container'),
         FILE_UPLOAD: 'FILE_UPLOAD',
         PRE_PROCESS_RUNNING: 'PRE_PROCESS_RUNNING',
         USER_INPUT: 'USER_INPUT',
+        POST_PROCESS_RUNNING: 'POST_PROCESS_RUNNING',
         COMPLETE: 'COMPLETE'
     },
     File = require('odata-resource-file').File;;
@@ -113,10 +114,9 @@ module.exports = function(container){
                                          .on('info',sendInfo)
                                          .on('complete',function(results){
                                              debug('initLayer.results',results);
-                                             setTimeout(function(){
-                                                moveClientTostate(STATES.COMPLETE,results);
-                                             },2000);
+                                             moveClientTostate(STATES.COMPLETE,results);
                                          });
+                            moveClientTostate(STATES.POST_PROCESS_RUNNING);
                             postProcessor.start();
                             break;
                     }
