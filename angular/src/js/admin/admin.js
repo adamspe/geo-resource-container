@@ -92,6 +92,7 @@ angular.module('app-container-geo.admin',[
         FILE_UPLOAD: 'FILE_UPLOAD',
         PRE_PROCESS_RUNNING: 'PRE_PROCESS_RUNNING',
         USER_INPUT: 'USER_INPUT',
+        POST_PROCESS_RUNNING: 'POST_PROCESS_RUNNING',
         COMPLETE: 'COMPLETE'
     },
     STATE,
@@ -127,7 +128,10 @@ angular.module('app-container-geo.admin',[
                         break;
                     case 'info':
                         $log.debug('info: ',msg.data);
-                        $scope.infoMessages.push(msg.data);
+                        $scope.infoMessages.splice(0,0,{
+                            cls: /^FAILED/.test(msg.data) ? 'error' : 'info',
+                            text: msg.data
+                        });
                         break;
                     case 'complete':
                         break;
@@ -156,9 +160,12 @@ angular.module('app-container-geo.admin',[
                     };
                     break;
                 case STATES.COMPLETE:
-                    $timeout(function(){
+                    // layer added, don't cleanup the file when the modal is dismissed.
+                    delete $scope.uploadedFile;
+                    // update dismiss to use close so the caller knows things went swimmingly
+                    $scope.dismiss = function() {
                         $uibModalInstance.close();
-                    },2000);
+                    };
                     break;
             }
         }
@@ -223,7 +230,8 @@ angular.module('app-container-geo.admin',[
                     listLayers();
                 });
             };
-            $scope.removeLayer = function(l) {
+            $scope.removeLayer = function(l,$event) {
+                $event.stopPropagation();
                 DialogService.confirm({
                     question: 'Are you sure you want to delete '+l.name+'?',
                     warning: 'This cannot be undone.'
