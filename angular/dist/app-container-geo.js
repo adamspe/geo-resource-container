@@ -329,7 +329,7 @@ angular.module('app-container-geo.admin',[
         }
     };
 }])
-.directive('layerAdminMap',['$log','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService',function($log,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService){
+.directive('layerAdminMap',['$log','$compile','$timeout','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService',function($log,$compile,$timeout,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService){
     return {
         restrict: 'C',
         template:'<ui-gmap-google-map ng-if="map" center="map.center" zoom="map.zoom" options="map.options" events="map.events">'+
@@ -387,7 +387,8 @@ angular.module('app-container-geo.admin',[
                     }*/
                 };
                 uiGmapIsReady.promise(1).then(function(instances){
-                    var map = instances[0].map;
+                    var map = instances[0].map,
+                        info;
                     map.data.addListener('mouseover',function(event){
                         map.data.overrideStyle(event.feature, {strokeWeight: 3});
                     });
@@ -397,6 +398,19 @@ angular.module('app-container-geo.admin',[
                     map.data.addListener('click',function(event) {
                         $scope.$apply(function(){
                             $log.debug('feature click.');
+                            $scope.iwFeature = event.feature.getMapFeature();
+                            var compiled = $compile('<layer-admin-feature-info-window feature="iwFeature"></layer-admin-feature-info-window>')($scope);
+                            if(!info) {
+                                info = new google_maps.InfoWindow({
+                                    maxWidth: 750,
+                                    content: 'temporary',
+                                });
+                            }
+                            $timeout(function(){
+                                info.setContent(compiled.html());
+                                info.setPosition(event.latLng);
+                                info.open(map);
+                            });
                         });
                     });
                     // kick the map so that it draws properly
@@ -406,6 +420,18 @@ angular.module('app-container-geo.admin',[
                     });
                 });
             });
+        }
+    };
+}])
+.directive('layerAdminFeatureInfoWindow',[function(){
+    return {
+        restrict: 'E',
+        template: '<h3>{{f.name()}}</h3>'+
+        '<ul class="list-unstyled">'+
+        '<li ng-repeat="(key,value) in f.properties()"><label>{{key}}</label> {{value}}</li>'+
+        '</ul>',
+        scope: {
+            f: '=feature'
         }
     };
 }]);
