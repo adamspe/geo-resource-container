@@ -245,7 +245,7 @@ angular.module('app-container-geo.admin',[
         }
     };
 }])
-.directive('layerAdminMap',['$log','$compile','$timeout','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService',function($log,$compile,$timeout,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService){
+.directive('layerAdminMap',['$log','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService',function($log,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService){
     return {
         restrict: 'C',
         template:'<ui-gmap-google-map ng-if="map" center="map.center" zoom="map.zoom" options="map.options" events="map.events">'+
@@ -272,35 +272,7 @@ angular.module('app-container-geo.admin',[
                             style: google_maps.ZoomControlStyle.SMALL,
                             position: google_maps.ControlPosition.RIGHT_TOP
                         }
-                    }/*,
-                    events : {
-                        dblclick: function(map,eventName,args) {
-                            var latLng = args[0].latLng,
-                                lat = latLng.lat(),
-                                lng = latLng.lng(),i;
-                            $log.debug('dblclick:['+lat+','+lng+']');
-                            if($scope.currentMapLayer) {
-                                $scope.currentMapLayer.remove();
-                            }
-                            delete $scope.currentMapLayer;
-                            delete $scope.currentFeatures;
-                            $scope.marker = {
-                                id: markerIndex++,
-                                coords: {
-                                    latitude: lat,
-                                    longitude: lng
-                                },
-                                events: {
-                                    'click': function() {
-                                        $log.debug('marker click');
-                                        //DialogService.buildConservationPlan($scope.currentMapLayer);
-                                    }
-                                }
-                            };
-                            $scope.featureProperties = [];
-                            MapLayerService.getForPoint(lat,lng).then(layerSetter(map));
-                        }
-                    }*/
+                    }
                 };
                 uiGmapIsReady.promise(1).then(function(instances){
                     var map = instances[0].map,
@@ -311,24 +283,7 @@ angular.module('app-container-geo.admin',[
                     map.data.addListener('mouseout',function(event) {
                         map.data.revertStyle();
                     });
-                    map.data.addListener('click',function(event) {
-                        $scope.$apply(function(){
-                            $log.debug('feature click.');
-                            $scope.iwFeature = event.feature.getMapFeature();
-                            var compiled = $compile('<layer-admin-feature-info-window feature="iwFeature"></layer-admin-feature-info-window>')($scope);
-                            if(!info) {
-                                info = new google_maps.InfoWindow({
-                                    maxWidth: 750,
-                                    content: 'temporary',
-                                });
-                            }
-                            $timeout(function(){
-                                info.setContent(compiled.html());
-                                info.setPosition(event.latLng);
-                                info.open(map);
-                            });
-                        });
-                    });
+                    map.data.addListener('click',MapLayerService.featureClickProperties($scope,map));
                     // kick the map so that it draws properly
                     google_maps.event.trigger(map, 'resize');
                     MapLayerService.getForLayer($scope.layer).then(function(mapLayer){
@@ -336,18 +291,6 @@ angular.module('app-container-geo.admin',[
                     });
                 });
             });
-        }
-    };
-}])
-.directive('layerAdminFeatureInfoWindow',[function(){
-    return {
-        restrict: 'E',
-        template: '<h3>{{f.name()}}</h3>'+
-        '<ul class="list-unstyled">'+
-        '<li ng-repeat="(key,value) in f.properties()"><label>{{key}}</label> {{value}}</li>'+
-        '</ul>',
-        scope: {
-            f: '=feature'
         }
     };
 }]);

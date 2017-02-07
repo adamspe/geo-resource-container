@@ -11,7 +11,7 @@ angular.module('app-container-geo',[
     var Feature = $appService('geo/feature/:id');
     return Feature;
 }])
-.factory('MapLayerService',['$q','$http','MapLayer','Feature',function($q,$http,MapLayer,Feature) {
+.factory('MapLayerService',['$q','$http','$log','$compile','$timeout','MapLayer','Feature',function($q,$http,$log,$compile,$timeout,MapLayer,Feature) {
     return {
         getForPoint: function(lat,lng) {
             var def = $q.defer();
@@ -48,6 +48,27 @@ angular.module('app-container-geo',[
                 })));
             });
             return def.promise;
+        },
+        featureClickProperties: function($scope,map) {
+            var info;
+            return function(event) {
+                $scope.$apply(function(){
+                    $log.debug('feature click.');
+                    $scope.$iwFeature = event.feature.getMapFeature();
+                    var compiled = $compile('<property-feature-info-window feature="$iwFeature"></property-feature-info-window>')($scope);
+                    if(!info) {
+                        info = new google.maps.InfoWindow({
+                            maxWidth: 750,
+                            content: 'temporary',
+                        });
+                    }
+                    $timeout(function(){
+                        info.setContent(compiled.html());
+                        info.setPosition(event.latLng);
+                        info.open(map);
+                    });
+                });
+            };
         }
     };
 }])
@@ -243,4 +264,16 @@ angular.module('app-container-geo',[
         return this;
     };
     return MapLayer;
+}])
+.directive('propertyFeatureInfoWindow',[function(){
+    return {
+        restrict: 'E',
+        template: '<h3>{{f.name()}}</h3>'+
+        '<ul class="list-unstyled">'+
+        '<li ng-repeat="(key,value) in f.properties()"><label>{{key}}</label> {{value}}</li>'+
+        '</ul>',
+        scope: {
+            f: '=feature'
+        }
+    };
 }]);
