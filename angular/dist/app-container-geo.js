@@ -1,6 +1,6 @@
 /*
  * app-container-geo
- * Version: 1.0.0 - 2017-02-07
+ * Version: 1.0.0 - 2017-02-09
  */
 
 /*! sprintf-js | Alexandru Marasteanu <hello@alexei.ro> (http://alexei.ro/) | BSD-3-Clause */
@@ -212,8 +212,14 @@ angular.module('app-container-geo.admin',[
                         break;
                     case 'info':
                         $log.debug('info: ',msg.data);
+                        /*
+                        if($scope.infoMessages.length > 200) {
+                            $scope.infoMessages = $scope.infoMessages.filter(function(m){
+                                return m.cls === 'error';
+                            }); // just hold onto errors
+                        }*/
                         $scope.infoMessages.splice(0,0,{
-                            cls: /^FAILED/.test(msg.data) ? 'error' : 'info',
+                            cls: /^FAILED/.test(msg.data) || /^ERROR/.test(msg.data) ? 'error' : 'info',
                             text: msg.data
                         });
                         break;
@@ -609,6 +615,7 @@ angular.module('app-container-geo',[
                 f.setProperty('$style',angular.extend({},BASE_STYLE,{fillColor: COLOR_SCALE(i)}));
                 return new MapFeature(f,self);
             });
+            var start = Date.now();
             // sort features by size and set their zIndex so they are stacked with the largest on the bottom
             self.$mapFeatures.sort(function(a,b){
                 return b.$area()-a.$area();
@@ -617,10 +624,12 @@ angular.module('app-container-geo',[
                 var style = f.$feature.getProperty('$style');
                 style.zIndex = i;
             });
+            /*
             $log.debug('feature stacking order',self.$mapFeatures.reduce(function(arr,f){
                 arr.push(f.layerName()+' : '+f.name());
                 return arr;
-            },[]).join(','));
+            },[]).join(','));*/
+            $log.debug('stacking order calculated in '+(Date.now()-start)+'ms');
             map.data.setStyle(function(f){
                 return f.getProperty('$style');
             });
