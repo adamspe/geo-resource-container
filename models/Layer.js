@@ -11,8 +11,14 @@ var mongoose = require('mongoose'),
 
 schema.post('remove',function(layer){
     // go cleanup associated features
-    var Feature = require('./Feature');
+    var Feature = require('./Feature'),
+        File = require('odata-resource-file').File;
     Feature.remove({_layer: layer._id},function(err){
+        if(err) {
+            console.error(err);
+        }
+    })
+    File.remove({_id:layer._sourceFile},function(err){
         if(err) {
             console.error(err);
         }
