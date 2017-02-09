@@ -128,8 +128,14 @@ angular.module('app-container-geo.admin',[
                         break;
                     case 'info':
                         $log.debug('info: ',msg.data);
+                        /*
+                        if($scope.infoMessages.length > 200) {
+                            $scope.infoMessages = $scope.infoMessages.filter(function(m){
+                                return m.cls === 'error';
+                            }); // just hold onto errors
+                        }*/
                         $scope.infoMessages.splice(0,0,{
-                            cls: /^FAILED/.test(msg.data) ? 'error' : 'info',
+                            cls: /^FAILED/.test(msg.data) || /^ERROR/.test(msg.data) ? 'error' : 'info',
                             text: msg.data
                         });
                         break;
