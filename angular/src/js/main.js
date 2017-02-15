@@ -15,7 +15,7 @@ angular.module('app-container-geo',[
     return {
         getForPoint: function(lat,lng) {
             var def = $q.defer();
-            Feature.get({id:'containingPoint',lat:lat,lon:lng},function(response) {
+            Feature.get({id:'intersects',coordinates:[lng,lat].join(',')},function(response) {
                 def.resolve(new MapLayer(response.list));
             });
             return def.promise;
@@ -69,6 +69,22 @@ angular.module('app-container-geo',[
                     });
                 });
             };
+        },
+        boundsToCoords: function(bounds) {
+            var ne = bounds.getNorthEast(),
+                sw = bounds.getSouthWest(),
+                coords = [];
+            function addLatLng(latLng) {
+                coords.push(latLng.lng());
+                coords.push(latLng.lat());
+            }
+            // sw, nw, ne, se
+            addLatLng(sw);
+            addLatLng(new google.maps.LatLng(ne.lat(),sw.lng()));
+            addLatLng(ne);
+            addLatLng(new google.maps.LatLng(sw.lat(),ne.lng()));
+            $log.debug('boundsToCoords',bounds,coords);
+            return coords;
         }
     };
 }])
@@ -267,6 +283,83 @@ angular.module('app-container-geo',[
         return this;
     };
     return MapLayer;
+}])
+.factory('DynamicMapLayer',['$log','$http','$timeout','MapLayer','Feature',function($log,$http,$timeout,MapLayer,Feature){
+    // the idea here is that this object will register itself to listen for
+    // map bounds_changed and negotiate with the /geo/feature/featureBounds
+    // service to add/remove features as necessary while the map is navigated
+    var DynamicMapLayer = function($scope,layerResource) {
+        MapLayer.call(this,[]);
+        this.$scope = $scope;
+        this.$layerResource = layerResource;
+    };
+    DynamicMapLayer.prototype = new MapLayer([]);
+
+    DynamicMapLayer.prototype.map = (function(superFunc){
+        return function(_) {
+            var self = this;
+            if(arguments.length) {
+                superFunc.call(self,_);
+                _.addListener('bounds_changed',function(){
+                    self.boundsChanged();
+                });
+                self.boundsChanged();
+                return self;
+            } else {
+                return superFunc.call(self);
+            }
+        };
+    })(DynamicMapLayer.prototype.map);
+
+    DynamicMapLayer.prototype.boundsChanged = function() {
+        var self = this;
+        if(self.$boundsTimer) {
+            $timeout.cancel(self.$boundsTimer);
+        }
+        self.$boundsTimer = $timeout(function(){
+            var map = self.map(),
+                bounds = map.getBounds(),
+                coords = DynamicMapLayer.boundsToCoords(bounds);
+            self.$inHandBoundaries = self.$inHandBoundaries||[];
+            $log.debug('DynamicMapLayer.bounds_changed',bounds,coords,self.$inHandBoundaries);
+            // TODO negotiate with featureBounds
+            $http.post(Feature.$basePath+'/featureBounds',self.$inHandBoundaries,{
+                params: {
+                    $filter: '_layer eq \''+self.$layerResource._id+'\'',
+                    coordinates: coords.join(','),
+                    q: 1e4
+                }
+            }).then(function(response){
+                $log.debug('success',response);
+                // TEMPORARY
+                self.$inHandBoundaries = response.data.ids;
+            },function(response){
+                $log.debug('error',response);
+            });
+        },500);
+    };
+
+    DynamicMapLayer.boundsToCoords = function(bounds) {
+        var ne = bounds.getNorthEast(),
+            sw = bounds.getSouthWest(),
+            nw = new google.maps.LatLng(ne.lat(),sw.lng()),
+            se = new google.maps.LatLng(sw.lat(),ne.lng()),
+            coords = [];
+        function addLatLng(latLng) {
+            coords.push(latLng.lng());
+            coords.push(latLng.lat());
+        }
+        // nw,sw,se,ne,nw
+        addLatLng(nw);
+        addLatLng(sw);
+        addLatLng(se);
+        addLatLng(ne);
+        addLatLng(nw); // close the loop
+        $log.debug('boundsToCoords',bounds,coords);
+        return coords;
+    };
+
+    return DynamicMapLayer;
 }])
 .directive('propertyFeatureInfoWindow',[function(){
     return {

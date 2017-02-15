@@ -251,7 +251,7 @@ angular.module('app-container-geo.admin',[
         }
     };
 }])
-.directive('layerAdminMap',['$log','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService',function($log,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService){
+.directive('layerAdminMap',['$log','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService','DynamicMapLayer',function($log,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService,DynamicMapLayer){
     return {
         restrict: 'C',
         template:'<ui-gmap-google-map ng-if="map" center="map.center" zoom="map.zoom" options="map.options" events="map.events">'+
@@ -278,7 +278,14 @@ angular.module('app-container-geo.admin',[
                             style: google_maps.ZoomControlStyle.SMALL,
                             position: google_maps.ControlPosition.RIGHT_TOP
                         }
-                    }
+                    }/*,
+                    events: {
+                        bounds_changed: function(map,eventName,args) {
+                            var bounds = map.getBounds(),
+                                coords = MapLayerService.boundsToCoords(bounds);
+                            $log.debug('bounds_changed',map.getBounds(),coords);
+                        }
+                    }*/
                 };
                 uiGmapIsReady.promise(1).then(function(instances){
                     var map = instances[0].map,
@@ -295,6 +302,7 @@ angular.module('app-container-geo.admin',[
                     MapLayerService.getForLayer($scope.layer).then(function(mapLayer){
                         mapLayer.map(map).add();
                     });
+                    var dml = (new DynamicMapLayer($scope,$scope.layer)).map(map);
                 });
             });
         }

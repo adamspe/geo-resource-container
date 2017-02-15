@@ -1,6 +1,6 @@
 var Resource = require('odata-resource'),
     conf = require('app-container-conf'),
-    debug = require('debug')('geo-api'),
+    debug = require('debug')('geo-resource-container'),
     prefix = (conf.get('resources:$apiRoot')||'/api/v1/')+'geo/',
     features,layers;
 
@@ -10,20 +10,13 @@ features = new Resource({
     populate:['_layer'],
     count: true
 })
-.staticLink('containingPoint',function(req,res){
-    var lat = parseFloat(req.query.lat),
-        lon = parseFloat(req.query.lon),
-        query;
-    query = features.initQuery(features.getModel().find({
-        'data.geometry':{
-            $geoIntersects:{
-                $geometry: {
-                    type: 'Point',
-                    coordinates: [lon,lat]
-                }
-            }
-        }
-    }),req);
+.staticLink('intersects',function(req,res){
+    var query;
+    try {
+        query = features.intersectsQuery(req);
+    } catch(err) {
+        return Resource.sendError(res,400,'Bad request',err);
+    }
     query.exec(function(err,found){
         if(err) {
             return Resource.sendError(res,500,'error finding features.',err);
@@ -31,6 +24,46 @@ features = new Resource({
         features.listResponse(req,res,found);
     });
 });
+
+features.intersectsQuery = function(req) {
+    var geometry = { type: 'Point' };
+    // lon,lat[,lon,lat]*
+    if(req.query.coordinates) {
+        geometry.coordinates = req.query.coordinates.split(',').map(function(c){
+            return parseFloat(c);
+        });
+        if(geometry.coordinates.length > 2) {
+            if((geometry.coordinates.length%2) !== 0) {
+                throw new Error('Invalid number of coordinates.');
+            }
+            geometry.type = 'Polygon';
+            // break into pairs and wrap
+            geometry.coordinates = [geometry.coordinates.reduce(function(arr,c,i){
+                if(i%2 == 0) {
+                    arr.push([c]);
+                } else {
+                    arr[arr.length-1].push(c);
+                }
+                return arr;
+            },[])];
+            // coordinates must be wound counter clockwise for inclusive
+            geometry.crs = {
+                type: "name",
+                properties: { name: "urn:x-mongodb:crs:strictwinding:EPSG:4326" }
+            };
+        }
+    } else {
+        throw new Error('Missing coordinates.');
+    }
+    debug('intersectsQuery.geometry',geometry);
+    return features.initQuery(features.getModel().find({
+        'data.geometry':{
+            $geoIntersects:{
+                $geometry: geometry
+            }
+        }
+    }),req);
+};
 
 layers = new Resource({
     rel: prefix+'layer',
@@ -43,31 +76,13 @@ layers = new Resource({
     key: '_layer'
 })
 .instanceLink('topojson',function(req,res){
-    var topology = require('topojson').topology;
+    var featuresToTopo = require('./lib/featuresToTopo');
     // TODO - this current route is memory intensive
     features.getModel().find({_layer: req._resourceId}).lean(true).exec(function(err,features){
         if(err) {
             return Resource.sendError(res,500,'error finding features.',err);
         }
-        features.forEach(function(f){
-            f.data.properties._featureProps = Object.keys(f).reduce(function(map,key){
-                var val = f[key];
-                if(typeof(val) !== 'object') {
-                    map[key] = val;
-                }
-                return map;
-            },{
-                _links: {
-                    self: prefix+'feature/'+f._id
-                }
-            });
-        });
-        res.json(topology({
-            layer: {
-                type: "FeatureCollection",
-                features: features.map(function(f) { return f.data; })
-            }
-        },(req.query.q ? Number(req.query.q) : undefined)));
+        res.json(featuresToTopo(features,req));
     });
     /* this doesn't work because topology will require all the GeoJson features at
      * one time, duh, so alternatively ndJson could be written to disk and then geo2topo

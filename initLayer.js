@@ -1,4 +1,3 @@
-
 var debug = require('debug')('geo-resource-container'),
     util = require('util'),
     conf = require('app-container-conf'),
