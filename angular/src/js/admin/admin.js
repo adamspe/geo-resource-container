@@ -1,5 +1,6 @@
 angular.module('app-container-geo.admin',[
-    'app-container-file'
+    'app-container-file',
+    'ui.bootstrap'
 ])
 .directive('propertyFormatValidate',['$log','$q','$parse','$window',function($log,$q,$parse,$window){
     return {

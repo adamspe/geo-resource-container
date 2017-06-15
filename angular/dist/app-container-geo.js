@@ -1,6 +1,6 @@
 /*
  * app-container-geo
- * Version: 1.0.0 - 2017-02-13
+ * Version: 1.0.0 - 2017-06-15
  */
 
 /*! sprintf-js | Alexandru Marasteanu <hello@alexei.ro> (http://alexei.ro/) | BSD-3-Clause */
@@ -83,7 +83,8 @@
 })(typeof(window) === 'undefined' ? this : window);
 
 angular.module('app-container-geo.admin',[
-    'app-container-file'
+    'app-container-file',
+    'ui.bootstrap'
 ])
 .directive('propertyFormatValidate',['$log','$q','$parse','$window',function($log,$q,$parse,$window){
     return {
@@ -773,6 +774,7 @@ angular.module('templates-app-container-geo', ['js/admin/layer-admin.html', 'js/
 
 angular.module("js/admin/layer-admin.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("js/admin/layer-admin.html",
+    "<div class=\"solo-view\">\n" +
     "<pane-set unique-id=\"layer-admin\" open-heading-cols=\"4\">\n" +
     "    <pane-set-header>\n" +
     "        <div class=\"pane-set-title\" title=\"Layer Administration\"></div>\n" +
@@ -792,6 +794,7 @@ angular.module("js/admin/layer-admin.html", []).run(["$templateCache", function(
     "        </div>\n" +
     "    </pane>\n" +
     "</pane-set>\n" +
+    "</div>\n" +
     "");
 }]);
 
