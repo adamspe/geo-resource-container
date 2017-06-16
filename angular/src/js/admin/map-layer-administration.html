@@ -1,0 +1,42 @@
+<md-switch id="admin-mode-toggle" aria-label="Toggle administration mode" ng-model="enabled"></md-switch>
+<span ng-if="enabled">
+    <md-autocomplete id="admin-layer-find" ng-if="!selection.layer" flex
+        md-no-cache="true"
+        md-selected-item="selection.layer"
+        md-search-text="layerSearch"
+        md-items="layer in findLayer(layerSearch)"
+        md-item-text="layer.name"
+        md-min-length="0"
+        placeholder="Put an existing layer on the map">
+        <md-item-template>
+            <span md-highlight-text="layerSearch">{{layer.name}}</span>
+        </md-item-template>
+    </md-autocomplete>
+
+    <md-button id="admin-layer-create" class="md-icon-button md-primary"
+        ng-if="!selection.layer"
+        ng-click="createLayer()"
+        aria-label="Add new layer">
+        <md-tooltip md-direction="left">Add new layer</md-tooltip>
+        <i class="fa fa-plus" aria-hidden="true"></i>
+    </md-button>
+
+    <md-card id="admin-layer-info" ng-if="selection.layer">
+        <md-card-title>
+            <md-card-title-text>
+                <span class="md-headline">{{selection.layer.name}}</span>
+                <span class="md-subhead file-info" file="selection.layer._sourceFile"></span>
+            </md-card-title-text>
+        </md-card-title>
+        <md-card-actions layout="row" layout-align="end center">
+            <md-button class="md-icon-button" ng-click="removeLayer(selection.layer)" aria-label="Delete layer">
+                <md-tooltip>Delete layer</md-tooltip>
+                <i class="fa fa-trash" aria-hidden="true"></i>
+            </md-button>
+            <md-button class="md-icon-button" ng-click="selection.layer=null">
+                <md-tooltip>Remove layer from map</md-tooltip>
+                <i class="fa fa-times" aria-hidden="true"></i>
+            </md-button>
+        </md-card-actions>
+    </md-card>
+</span>

@@ -10,7 +10,7 @@ angular.module('app-container-geo.admin',[
                 exampleProperties = $parse($attrs.propertyFormatValidate)($scope);
             $log.debug('propertyFormatValidate.exampleProperties',exampleProperties);
             if(exampleProperties) {
-                $ctrl.$asyncValidators[$attrs.ngModel.replace('.','_')+'_propertyFormat'] = function(modelValue,newValue) {
+                $ctrl.$asyncValidators['propertyFormat'] = function(modelValue,newValue) {
                     $log.debug('modelValue="'+modelValue+'" newValue="'+newValue+'"');
                     var def = $q.defer(),fmt;
                     if(newValue) {
@@ -87,7 +87,7 @@ angular.module('app-container-geo.admin',[
         '</table>'
     };
 }])
-.controller('LayerCreateCtrl',['$scope','$log','$timeout','$uibModalInstance','WebSocketConnection','File','NotificationService',function($scope,$log,$timeout,$uibModalInstance,WebSocketConnection,File,NotificationService) {
+.controller('LayerCreateCtrl',['$scope','$log','$timeout','$mdDialog','WebSocketConnection','File','NotificationService',function($scope,$log,$timeout,$mdDialog,WebSocketConnection,File,NotificationService) {
     var STATES = $scope.STATES = {
         HANDSHAKE: 'HANDSHAKE',
         FILE_UPLOAD: 'FILE_UPLOAD',
@@ -102,7 +102,7 @@ angular.module('app-container-geo.admin',[
 
     $scope.dismiss = function() {
         function goaway() {
-            $uibModalInstance.dismiss();
+            $mdDialog.cancel();
         }
         if($scope.uploadedFile) {
             // cleanup, they're dismissing
@@ -171,7 +171,8 @@ angular.module('app-container-geo.admin',[
                     delete $scope.uploadedFile;
                     // update dismiss to use close so the caller knows things went swimmingly
                     $scope.dismiss = function() {
-                        $uibModalInstance.close();
+                        // TODO pass new layer back
+                        $mdDialog.hide();
                     };
                     break;
             }
@@ -213,97 +214,71 @@ angular.module('app-container-geo.admin',[
     };
 
 }])
-.directive('layerAdmin',['$log','Layer','NotificationService','DialogService','$uibModal','PaneStateService',function($log,Layer,NotificationService,DialogService,$uibModal,PaneStateService){
+.directive('mapLayerAdministration',['$log','$mdDialog','$typeAheadFinder','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService','NotificationService','Layer','DynamicMapLayer',function($log,$mdDialog,$typeAheadFinder,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService,NotificationService,Layer,DynamicMapLayer){
     return {
         restrict: 'E',
-        templateUrl: 'js/admin/layer-admin.html',
-        scope: {},
-        link: function($scope,$element,$attrs) {
-            $scope.isPaneActive = PaneStateService.isActive;
-            function listLayers() {
-                $scope.layers = Layer.query({});
-            }
-            listLayers();
-            $scope.createLayer = function() {
-                $uibModal.open({
-                    templateUrl: 'js/admin/layer-create.html',
-                    controller: 'LayerCreateCtrl',
-                    windowClass: 'layer-create',
-                    size: 'lg',
-                    backdrop: 'static',
-                    keyboard: false
-                }).result.then(function(){
-                    $log.debug('layer creation dialog ok');
-                    listLayers();
-                });
-            };
-            $scope.removeLayer = function(l,$event) {
-                $event.stopPropagation();
-                DialogService.confirm({
-                    question: 'Are you sure you want to delete '+l.name+'?',
-                    warning: 'This cannot be undone.'
-                }).then(function(){
-                    l.$remove({id: l._id},function(){
-                        NotificationService.addInfo('Removed '+l.name);
-                        listLayers();
-                    },NotificationService.addError);
-                });
-            };
-        }
-    };
-}])
-.directive('layerAdminMap',['$log','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService','DynamicMapLayer',function($log,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService,DynamicMapLayer){
-    return {
-        restrict: 'C',
-        template:'<ui-gmap-google-map ng-if="map" center="map.center" zoom="map.zoom" options="map.options" events="map.events">'+
-        '<ui-gmap-marker ng-if="marker" coords="marker.coords" options="marker.options" events="marker.events" idkey="marker.id"></ui-gmap-marker>'+
-        '</ui-gmap-google-map>',
+        templateUrl: 'js/admin/map-layer-administration.html',
         scope: {
-            layer: '='
+            adminModeChange: '&'
         },
-        link: function($scope,$elm,$attrs) {
+        link: function($scope) {
+            $scope.selection = {};
+            $scope.findLayer = $typeAheadFinder(Layer,function(s){
+                return 'contains(name,\''+s+'\')';
+            });
             uiGmapGoogleMapApi.then(function(google_maps){
-                uiGmapIsReady.reset();
-                $scope.map = {
-                    center: { latitude: 41.135760, longitude: -99.157679 },
-                    zoom: 4,
-                    options: {
-                        scrollwheel: false,
-                        streetViewControl: false,
-                        mapTypeControl: false,
-                        mapTypeId: google_maps.MapTypeId.HYBRID,
-                        panControl: false,
-                        zoomControl: true,
-                        disableDoubleClickZoom: true,
-                        zoomControlOptions: {
-                            style: google_maps.ZoomControlStyle.SMALL,
-                            position: google_maps.ControlPosition.RIGHT_TOP
-                        }
-                    }/*,
-                    events: {
-                        bounds_changed: function(map,eventName,args) {
-                            var bounds = map.getBounds(),
-                                coords = MapLayerService.boundsToCoords(bounds);
-                            $log.debug('bounds_changed',map.getBounds(),coords);
-                        }
-                    }*/
-                };
                 uiGmapIsReady.promise(1).then(function(instances){
-                    var map = instances[0].map,
-                        info;
-                    map.data.addListener('mouseover',function(event){
-                        map.data.overrideStyle(event.feature, {strokeWeight: 3});
+                    var map = instances[0].map;
+                    $log.debug('map-layer-administration: ready');
+                    function reset() {
+                        if($scope.activeMapLayer) {
+                            $scope.activeMapLayer.remove();
+                        }
+                        delete $scope.activeMapLayer;
+                    }
+                    function setLayer(layer){
+                        reset();
+                        if(layer) {
+                            MapLayerService.getForLayer(layer).then(function(mapLayer){
+                                // TODO
+                                //$scope.activeMapLayer = (new DynamicMapLayer($scope,layer)).map(map).add();
+                                $scope.activeMapLayer = mapLayer.map(map).add();
+                            });
+                        }
+                    }
+                    $scope.$watch('enabled',function(onOff){
+                        $log.debug('map-layer-administration: '+(onOff ? 'on' : 'off'));
+                        ($scope.adminModeChange||angular.noop)({mode: onOff});
+                        reset();
                     });
-                    map.data.addListener('mouseout',function(event) {
-                        map.data.revertStyle();
+                    $scope.$watch('selection.layer',function(layer){
+                        $log.debug('map-layer-administration: layer',layer);
+                        setLayer(layer);
                     });
-                    map.data.addListener('click',MapLayerService.featureClickProperties($scope,map));
-                    // kick the map so that it draws properly
-                    google_maps.event.trigger(map, 'resize');
-                    MapLayerService.getForLayer($scope.layer).then(function(mapLayer){
-                        mapLayer.map(map).add();
-                    });
-                    var dml = (new DynamicMapLayer($scope,$scope.layer)).map(map);
+                    $scope.createLayer = function() {
+                        $mdDialog.show({
+                            templateUrl: 'js/admin/layer-create.html',
+                            controller: 'LayerCreateCtrl',
+                            fullscreen: true,
+                            clickOutsideToClose: false,
+                            escapeToClose: false
+                        }).then(setLayer,angular.noop);
+                    };
+                    $scope.removeLayer = function(l,$event) {
+                        $mdDialog.show($mdDialog.confirm()
+                            .title('Are you sure you want to delete '+l.name+'?')
+                            .textContent('This cannot be undone.')
+                            .ariaLabel('Delete map layer')
+                            .ok('Yes')
+                            .cancel('No'))
+                            .then(function(){
+                                    delete $scope.selection.layer;
+                                    reset();
+                                    l.$remove({id: l._id},function(){
+                                        NotificationService.addInfo('Removed '+l.name);
+                                    },NotificationService.addError);
+                                },angular.noop);
+                    };
                 });
             });
         }

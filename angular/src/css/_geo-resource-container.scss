@@ -21,3 +21,43 @@ layer-admin {
 
     }
 }
+
+#admin-mode-toggle,
+#admin-layer-create,
+#admin-layer-info,
+#admin-layer-find {
+    position: absolute;
+    right: 10px;
+}
+
+#admin-mode-toggle {
+    bottom: 10px;
+}
+
+#admin-layer-create {
+    bottom: 110px;
+    background-color: #eee;
+    &:hover {
+        background-color: #ddd;
+    }
+}
+
+#admin-layer-info,
+#admin-layer-find {
+    bottom: 60px;
+    background-color: #fff;
+    width: 400px;
+}
+#admin-layer-find {
+    md-input-container {
+        margin: 0px;
+        .md-errors-spacer {
+            min-height: 0px;
+        }
+    }
+}
+#admin-layer-info {
+    .file-info .file-info-link {
+        display: block;
+    }
+}

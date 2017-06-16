@@ -1,6 +1,6 @@
 /*
  * app-container-geo
- * Version: 1.0.0 - 2017-06-15
+ * Version: 1.0.0 - 2017-06-16
  */
 
 /*! sprintf-js | Alexandru Marasteanu <hello@alexei.ro> (http://alexei.ro/) | BSD-3-Clause */
@@ -94,7 +94,7 @@ angular.module('app-container-geo.admin',[
                 exampleProperties = $parse($attrs.propertyFormatValidate)($scope);
             $log.debug('propertyFormatValidate.exampleProperties',exampleProperties);
             if(exampleProperties) {
-                $ctrl.$asyncValidators[$attrs.ngModel.replace('.','_')+'_propertyFormat'] = function(modelValue,newValue) {
+                $ctrl.$asyncValidators['propertyFormat'] = function(modelValue,newValue) {
                     $log.debug('modelValue="'+modelValue+'" newValue="'+newValue+'"');
                     var def = $q.defer(),fmt;
                     if(newValue) {
@@ -171,7 +171,7 @@ angular.module('app-container-geo.admin',[
         '</table>'
     };
 }])
-.controller('LayerCreateCtrl',['$scope','$log','$timeout','$uibModalInstance','WebSocketConnection','File','NotificationService',function($scope,$log,$timeout,$uibModalInstance,WebSocketConnection,File,NotificationService) {
+.controller('LayerCreateCtrl',['$scope','$log','$timeout','$mdDialog','WebSocketConnection','File','NotificationService',function($scope,$log,$timeout,$mdDialog,WebSocketConnection,File,NotificationService) {
     var STATES = $scope.STATES = {
         HANDSHAKE: 'HANDSHAKE',
         FILE_UPLOAD: 'FILE_UPLOAD',
@@ -186,7 +186,7 @@ angular.module('app-container-geo.admin',[
 
     $scope.dismiss = function() {
         function goaway() {
-            $uibModalInstance.dismiss();
+            $mdDialog.cancel();
         }
         if($scope.uploadedFile) {
             // cleanup, they're dismissing
@@ -255,7 +255,8 @@ angular.module('app-container-geo.admin',[
                     delete $scope.uploadedFile;
                     // update dismiss to use close so the caller knows things went swimmingly
                     $scope.dismiss = function() {
-                        $uibModalInstance.close();
+                        // TODO pass new layer back
+                        $mdDialog.hide();
                     };
                     break;
             }
@@ -297,97 +298,71 @@ angular.module('app-container-geo.admin',[
     };
 
 }])
-.directive('layerAdmin',['$log','Layer','NotificationService','DialogService','$uibModal','PaneStateService',function($log,Layer,NotificationService,DialogService,$uibModal,PaneStateService){
+.directive('mapLayerAdministration',['$log','$mdDialog','$typeAheadFinder','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService','NotificationService','Layer','DynamicMapLayer',function($log,$mdDialog,$typeAheadFinder,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService,NotificationService,Layer,DynamicMapLayer){
     return {
         restrict: 'E',
-        templateUrl: 'js/admin/layer-admin.html',
-        scope: {},
-        link: function($scope,$element,$attrs) {
-            $scope.isPaneActive = PaneStateService.isActive;
-            function listLayers() {
-                $scope.layers = Layer.query({});
-            }
-            listLayers();
-            $scope.createLayer = function() {
-                $uibModal.open({
-                    templateUrl: 'js/admin/layer-create.html',
-                    controller: 'LayerCreateCtrl',
-                    windowClass: 'layer-create',
-                    size: 'lg',
-                    backdrop: 'static',
-                    keyboard: false
-                }).result.then(function(){
-                    $log.debug('layer creation dialog ok');
-                    listLayers();
-                });
-            };
-            $scope.removeLayer = function(l,$event) {
-                $event.stopPropagation();
-                DialogService.confirm({
-                    question: 'Are you sure you want to delete '+l.name+'?',
-                    warning: 'This cannot be undone.'
-                }).then(function(){
-                    l.$remove({id: l._id},function(){
-                        NotificationService.addInfo('Removed '+l.name);
-                        listLayers();
-                    },NotificationService.addError);
-                });
-            };
-        }
-    };
-}])
-.directive('layerAdminMap',['$log','uiGmapGoogleMapApi','uiGmapIsReady','MapLayerService','DynamicMapLayer',function($log,uiGmapGoogleMapApi,uiGmapIsReady,MapLayerService,DynamicMapLayer){
-    return {
-        restrict: 'C',
-        template:'<ui-gmap-google-map ng-if="map" center="map.center" zoom="map.zoom" options="map.options" events="map.events">'+
-        '<ui-gmap-marker ng-if="marker" coords="marker.coords" options="marker.options" events="marker.events" idkey="marker.id"></ui-gmap-marker>'+
-        '</ui-gmap-google-map>',
+        templateUrl: 'js/admin/map-layer-administration.html',
         scope: {
-            layer: '='
+            adminModeChange: '&'
         },
-        link: function($scope,$elm,$attrs) {
+        link: function($scope) {
+            $scope.selection = {};
+            $scope.findLayer = $typeAheadFinder(Layer,function(s){
+                return 'contains(name,\''+s+'\')';
+            });
             uiGmapGoogleMapApi.then(function(google_maps){
-                uiGmapIsReady.reset();
-                $scope.map = {
-                    center: { latitude: 41.135760, longitude: -99.157679 },
-                    zoom: 4,
-                    options: {
-                        scrollwheel: false,
-                        streetViewControl: false,
-                        mapTypeControl: false,
-                        mapTypeId: google_maps.MapTypeId.HYBRID,
-                        panControl: false,
-                        zoomControl: true,
-                        disableDoubleClickZoom: true,
-                        zoomControlOptions: {
-                            style: google_maps.ZoomControlStyle.SMALL,
-                            position: google_maps.ControlPosition.RIGHT_TOP
-                        }
-                    }/*,
-                    events: {
-                        bounds_changed: function(map,eventName,args) {
-                            var bounds = map.getBounds(),
-                                coords = MapLayerService.boundsToCoords(bounds);
-                            $log.debug('bounds_changed',map.getBounds(),coords);
-                        }
-                    }*/
-                };
                 uiGmapIsReady.promise(1).then(function(instances){
-                    var map = instances[0].map,
-                        info;
-                    map.data.addListener('mouseover',function(event){
-                        map.data.overrideStyle(event.feature, {strokeWeight: 3});
+                    var map = instances[0].map;
+                    $log.debug('map-layer-administration: ready');
+                    function reset() {
+                        if($scope.activeMapLayer) {
+                            $scope.activeMapLayer.remove();
+                        }
+                        delete $scope.activeMapLayer;
+                    }
+                    function setLayer(layer){
+                        reset();
+                        if(layer) {
+                            MapLayerService.getForLayer(layer).then(function(mapLayer){
+                                // TODO
+                                //$scope.activeMapLayer = (new DynamicMapLayer($scope,layer)).map(map).add();
+                                $scope.activeMapLayer = mapLayer.map(map).add();
+                            });
+                        }
+                    }
+                    $scope.$watch('enabled',function(onOff){
+                        $log.debug('map-layer-administration: '+(onOff ? 'on' : 'off'));
+                        ($scope.adminModeChange||angular.noop)({mode: onOff});
+                        reset();
                     });
-                    map.data.addListener('mouseout',function(event) {
-                        map.data.revertStyle();
+                    $scope.$watch('selection.layer',function(layer){
+                        $log.debug('map-layer-administration: layer',layer);
+                        setLayer(layer);
                     });
-                    map.data.addListener('click',MapLayerService.featureClickProperties($scope,map));
-                    // kick the map so that it draws properly
-                    google_maps.event.trigger(map, 'resize');
-                    MapLayerService.getForLayer($scope.layer).then(function(mapLayer){
-                        mapLayer.map(map).add();
-                    });
-                    var dml = (new DynamicMapLayer($scope,$scope.layer)).map(map);
+                    $scope.createLayer = function() {
+                        $mdDialog.show({
+                            templateUrl: 'js/admin/layer-create.html',
+                            controller: 'LayerCreateCtrl',
+                            fullscreen: true,
+                            clickOutsideToClose: false,
+                            escapeToClose: false
+                        }).then(setLayer,angular.noop);
+                    };
+                    $scope.removeLayer = function(l,$event) {
+                        $mdDialog.show($mdDialog.confirm()
+                            .title('Are you sure you want to delete '+l.name+'?')
+                            .textContent('This cannot be undone.')
+                            .ariaLabel('Delete map layer')
+                            .ok('Yes')
+                            .cancel('No'))
+                            .then(function(){
+                                    delete $scope.selection.layer;
+                                    reset();
+                                    l.$remove({id: l._id},function(){
+                                        NotificationService.addInfo('Removed '+l.name);
+                                    },NotificationService.addError);
+                                },angular.noop);
+                    };
                 });
             });
         }
@@ -770,33 +745,7 @@ angular.module('app-container-geo',[
     };
 }]);
 
-angular.module('templates-app-container-geo', ['js/admin/layer-admin.html', 'js/admin/layer-create-eprops-popover.html', 'js/admin/layer-create-idfmt-popover.html', 'js/admin/layer-create-input-form.html', 'js/admin/layer-create-lname-popover.html', 'js/admin/layer-create-lsource-popover.html', 'js/admin/layer-create-nmfmt-popover.html', 'js/admin/layer-create.html']);
-
-angular.module("js/admin/layer-admin.html", []).run(["$templateCache", function($templateCache) {
-  $templateCache.put("js/admin/layer-admin.html",
-    "<div class=\"solo-view\">\n" +
-    "<pane-set unique-id=\"layer-admin\" open-heading-cols=\"4\">\n" +
-    "    <pane-set-header>\n" +
-    "        <div class=\"pane-set-title\" title=\"Layer Administration\"></div>\n" +
-    "    </pane-set-header>\n" +
-    "    <pane-set-footer>\n" +
-    "        <button class=\"btn btn-default pull-right\" ng-click=\"createLayer()\">New Layer</button>\n" +
-    "    </pane-set-footer>\n" +
-    "\n" +
-    "    <pane ng-repeat=\"l in layers.list\" unique-id=\"{{l._id}}\">\n" +
-    "        <pane-heading>\n" +
-    "            <h4>{{l.name}}</h4>\n" +
-    "            <div class=\"file-info\" file=\"l._sourceFile\"></div>\n" +
-    "            <a href ng-click=\"removeLayer(l,$event)\">Remove layer</a>\n" +
-    "        </pane-heading>\n" +
-    "        <div>\n" +
-    "            <div class=\"layer-admin-map\" layer=\"l\" ng-if=\"isPaneActive(l._id)\"/>\n" +
-    "        </div>\n" +
-    "    </pane>\n" +
-    "</pane-set>\n" +
-    "</div>\n" +
-    "");
-}]);
+angular.module('templates-app-container-geo', ['js/admin/layer-create-eprops-popover.html', 'js/admin/layer-create-idfmt-popover.html', 'js/admin/layer-create-input-form.html', 'js/admin/layer-create-lname-popover.html', 'js/admin/layer-create-lsource-popover.html', 'js/admin/layer-create-nmfmt-popover.html', 'js/admin/layer-create.html', 'js/admin/map-layer-administration.html']);
 
 angular.module("js/admin/layer-create-eprops-popover.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("js/admin/layer-create-eprops-popover.html",
@@ -844,46 +793,48 @@ angular.module("js/admin/layer-create-idfmt-popover.html", []).run(["$templateCa
 angular.module("js/admin/layer-create-input-form.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("js/admin/layer-create-input-form.html",
     "<form name=\"newLayerForm\" ng-if=\"userInput && preResults\">\n" +
-    "    <div class=\"form-group\">\n" +
-    "        <label for=\"inputFile\">Source File</label>\n" +
-    "        <div id=\"inputFile\" class=\"file-info\" file=\"uploadedFile\"></div>\n" +
-    "    </div>\n" +
-    "    <div class=\"form-group\">\n" +
-    "        <div class=\"text-danger pull-right\" ng-if=\"newLayerForm.$error.layerNameinUse.length\">\n" +
-    "            The layer name &quot;{{newLayerForm.$error.layerNameinUse[0].$viewValue}}&quot; is already in use.\n" +
+    "    <div layout=\"column\">\n" +
+    "        <div style=\"margin-bottom: 10px;\">\n" +
+    "            <label for=\"inputFile\">Source File</label>\n" +
+    "            <div id=\"inputFile\" class=\"file-info\" file=\"uploadedFile\"></div>\n" +
     "        </div>\n" +
-    "        <label for=\"layerName\">Layer Name <i uib-popover-template=\"'js/admin/layer-create-lname-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i> *</label>\n" +
-    "        <input id=\"layerName\" type=\"text\" class=\"form-control\"\n" +
-    "               ng-model=\"userInput.layerName\" layer-name-validate required />\n" +
-    "    </div>\n" +
-    "    <div class=\"form-group\">\n" +
-    "        <div class=\"text-danger pull-right\" ng-if=\"newLayerForm.$error.userInput_featureIdFmt_propertyFormat.length\">\n" +
-    "            Invalid format\n" +
+    "        <md-input-container>\n" +
+    "            <label>Layer Name <!--i uib-popover-template=\"'js/admin/layer-create-lname-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i--></label>\n" +
+    "            <input name=\"layerName\" type=\"text\" ng-model=\"userInput.layerName\" layer-name-validate required />\n" +
+    "            <div ng-messages=\"newLayerForm.layerName.$error\">\n" +
+    "                <div ng-message=\"layerNameinUse\">This layer name is already in use.</div>\n" +
+    "            </div>\n" +
+    "        </md-input-container>\n" +
+    "        <md-input-container>\n" +
+    "            <label>Feature Id Format <!--i uib-popover-template=\"'js/admin/layer-create-idfmt-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i--></label>\n" +
+    "            <input name=\"featureIdFmt\" type=\"text\" ng-model=\"userInput.featureIdFmt\"\n" +
+    "                   property-format-validate=\"preResults.exampleProperties\" required />\n" +
+    "           <div ng-messages=\"newLayerForm.featureIdFmt.$error\">\n" +
+    "               <div ng-message=\"propertyFormat\">Invalid format.</div>\n" +
+    "           </div>\n" +
+    "        </md-input-container>\n" +
+    "        <md-input-container>\n" +
+    "            <label for=\"featureNameFmt\">Feature Name Format <!--i uib-popover-template=\"'js/admin/layer-create-nmfmt-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i--></label>\n" +
+    "            <input name=\"featureNameFmt\" type=\"text\" ng-model=\"userInput.featureNameFmt\"\n" +
+    "                   property-format-validate=\"preResults.exampleProperties\" required />\n" +
+    "           <div ng-messages=\"newLayerForm.featureNameFmt.$error\">\n" +
+    "               <div ng-message=\"propertyFormat\">Invalid format.</div>\n" +
+    "           </div>\n" +
+    "        </md-input-container>\n" +
+    "        <md-input-container>\n" +
+    "            <label>Layer Source <!--i uib-popover-template=\"'js/admin/layer-create-lsource-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i--></label>\n" +
+    "            <input name=\"layerSource\" type=\"url\" ng-model=\"userInput.layerSource\" />\n" +
+    "            <div ng-messages=\"newLayerForm.layerSource.$error\">\n" +
+    "                <div ng-message=\"url\">Invalid url.</div>\n" +
+    "            </div>\n" +
+    "        </md-input-container>\n" +
+    "        <div layout=\"row\" layout-align=\"end end\">\n" +
+    "            <md-button ng-click=\"dismiss()\">Cancel</md-button>\n" +
+    "            <md-button class=\"md-primary\" ng-click=\"add()\" ng-disabled=\"newLayerForm.$invalid\">OK</md-button>\n" +
     "        </div>\n" +
-    "        <label for=\"featureIdFmt\">Feature Id Format <i uib-popover-template=\"'js/admin/layer-create-idfmt-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i> *</label>\n" +
-    "        <input id=\"featureIdFmt\" type=\"text\" class=\"form-control\"\n" +
-    "               ng-model=\"userInput.featureIdFmt\"\n" +
-    "               property-format-validate=\"preResults.exampleProperties\" required />\n" +
     "    </div>\n" +
-    "    <div class=\"form-group\">\n" +
-    "        <div class=\"text-danger pull-right\" ng-if=\"newLayerForm.$error.userInput_featureNameFmt_propertyFormat.length\">\n" +
-    "            Invalid format\n" +
-    "        </div>\n" +
-    "        <label for=\"featureNameFmt\">Feature Name Format <i uib-popover-template=\"'js/admin/layer-create-nmfmt-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i> *</label>\n" +
-    "        <input id=\"featureNameFmt\" type=\"text\" class=\"form-control\"\n" +
-    "               ng-model=\"userInput.featureNameFmt\"\n" +
-    "               property-format-validate=\"preResults.exampleProperties\" required />\n" +
-    "    </div>\n" +
-    "    <div class=\"form-group\">\n" +
-    "        <label for=\"layerSource\">Layer Source <i uib-popover-template=\"'js/admin/layer-create-lsource-popover.html'\" popover-placement=\"auto right\" class=\"fa fa-info-circle\" aria-hidden=\"true\"></i> </label>\n" +
-    "        <input id=\"layerSource\" type=\"url\" class=\"form-control\"\n" +
-    "               ng-model=\"userInput.layerSource\" />\n" +
-    "    </div>\n" +
-    "    <ul class=\"list-inline pull-right\">\n" +
-    "        <li><button class=\"btn btn-default\" ng-click=\"dismiss()\">Cancel</button></li>\n" +
-    "        <li><button class=\"btn btn-default\" ng-click=\"add()\" ng-disabled=\"newLayerForm.$invalid\">Create</button></li>\n" +
-    "    </ul>\n" +
     "</form>\n" +
+    "<div class=\"example-layer-properties\"></div>\n" +
     "");
 }]);
 
@@ -925,36 +876,80 @@ angular.module("js/admin/layer-create-nmfmt-popover.html", []).run(["$templateCa
 
 angular.module("js/admin/layer-create.html", []).run(["$templateCache", function($templateCache) {
   $templateCache.put("js/admin/layer-create.html",
-    "<div class=\"clearfix modal-header\">\n" +
-    "    <ul class=\"list-inline pull-right\">\n" +
-    "        <li class=\"spinner\" is-working=\"!STATE || [STATE.FILE_UPLOAD,STATE.USER_INPUT].indexOf(STATE) !== -1\"></li>\n" +
-    "        <li><a href class=\"pull-right\" ng-click=\"dismiss()\"><i class=\"fa fa-times-circle-o fa-2x\"></i></a></li>\n" +
-    "    </ul>\n" +
+    "<section class=\"app-panel add-layer-dialog\">\n" +
+    "    <md-toolbar class=\"md-toolbar-tools\">\n" +
+    "        <h2 flex md-truncate>Add new layer</h2>\n" +
+    "        <md-progress-circular md-mode=\"indeterminate\" ng-if=\"!STATE || [STATE.FILE_UPLOAD,STATE.USER_INPUT].indexOf(STATE) !== -1\"></md-progress-circular>\n" +
+    "        <md-button class=\"md-icon-button close-dialog\" aria-label=\"Close dialog\" ng-click=\"dismiss()\"></md-button>\n" +
+    "    </md-toolbar>\n" +
+    "    <md-content layout-padding>\n" +
+    "        <p ng-if=\"!STATE\">Waiting to establish connection...</p>\n" +
     "\n" +
-    "    <h2>Add Layer</h2>\n" +
-    "</div>\n" +
-    "<div class=\"clearfix modal-body\">\n" +
-    "    <p ng-if=\"!STATE\">Waiting to establish connection...</p>\n" +
+    "        <div ng-show=\"STATE === STATES.FILE_UPLOAD\">\n" +
+    "            <p>Start by uploading the source of your layer (currently only zipped shapfile).</p>\n" +
+    "            <input type=\"file\" file-model=\"fileToUpload\" file-resource=\"fileResource\" />\n" +
+    "        </div>\n" +
     "\n" +
-    "    <div ng-show=\"STATE === STATES.FILE_UPLOAD\">\n" +
-    "        <p>Start by uploading the source of your layer (currently only zipped shapfile).</p>\n" +
-    "        <input type=\"file\" file-model=\"fileToUpload\" file-resource=\"fileResource\" />\n" +
-    "    </div>\n" +
+    "        <div ng-show=\"STATE === STATES.USER_INPUT\">\n" +
+    "            <p>Your new layer will have <mark>{{preResults.featureCount}}</mark> features (assuming they can all\n" +
+    "                be successfully indexed).</p>\n" +
+    "            <div class=\"layer-create-input-form clearfix\"></div>\n" +
+    "        </div>\n" +
     "\n" +
-    "    <div ng-show=\"STATE === STATES.USER_INPUT\">\n" +
-    "        <p>Your new layer will have <mark>{{preResults.featureCount}}</mark> features (assuming they can all\n" +
-    "            be successfully indexed).</p>\n" +
-    "        <div class=\"layer-create-input-form clearfix\"></div>\n" +
-    "        <div class=\"example-layer-properties\"></div>\n" +
-    "    </div>\n" +
+    "        <div ng-show=\"STATE === STATES.POST_PROCESS_RUNNING || (STATE === STATES.COMPLETE && userInput)\">\n" +
+    "            <ul class=\"list-unstyled layer-create-messages\">\n" +
+    "                <li ng-if=\"STATE === STATES.COMPLETE && userInput\">Layer {{userInput.layerName}} added.</li>\n" +
+    "                <li ng-repeat=\"msg in infoMessages\"><code class=\"{{msg.cls}}\">{{msg.text}}</code></li>\n" +
+    "            </ul>\n" +
+    "        </div>\n" +
+    "    </md-content>\n" +
+    "</section>\n" +
+    "");
+}]);
+
+angular.module("js/admin/map-layer-administration.html", []).run(["$templateCache", function($templateCache) {
+  $templateCache.put("js/admin/map-layer-administration.html",
+    "<md-switch id=\"admin-mode-toggle\" aria-label=\"Toggle administration mode\" ng-model=\"enabled\"></md-switch>\n" +
+    "<span ng-if=\"enabled\">\n" +
+    "    <md-autocomplete id=\"admin-layer-find\" ng-if=\"!selection.layer\" flex\n" +
+    "        md-no-cache=\"true\"\n" +
+    "        md-selected-item=\"selection.layer\"\n" +
+    "        md-search-text=\"layerSearch\"\n" +
+    "        md-items=\"layer in findLayer(layerSearch)\"\n" +
+    "        md-item-text=\"layer.name\"\n" +
+    "        md-min-length=\"0\"\n" +
+    "        placeholder=\"Put an existing layer on the map\">\n" +
+    "        <md-item-template>\n" +
+    "            <span md-highlight-text=\"layerSearch\">{{layer.name}}</span>\n" +
+    "        </md-item-template>\n" +
+    "    </md-autocomplete>\n" +
     "\n" +
-    "    <div ng-show=\"STATE === STATES.POST_PROCESS_RUNNING || (STATE === STATES.COMPLETE && userInput)\">\n" +
-    "        <ul class=\"list-unstyled layer-create-messages\">\n" +
-    "            <li ng-if=\"STATE === STATES.COMPLETE && userInput\">Layer {{userInput.layerName}} added.</li>\n" +
-    "            <li ng-repeat=\"msg in infoMessages\"><code class=\"{{msg.cls}}\">{{msg.text}}</code></li>\n" +
-    "        </ul>\n" +
+    "    <md-button id=\"admin-layer-create\" class=\"md-icon-button md-primary\"\n" +
+    "        ng-if=\"!selection.layer\"\n" +
+    "        ng-click=\"createLayer()\"\n" +
+    "        aria-label=\"Add new layer\">\n" +
+    "        <md-tooltip md-direction=\"left\">Add new layer</md-tooltip>\n" +
+    "        <i class=\"fa fa-plus\" aria-hidden=\"true\"></i>\n" +
+    "    </md-button>\n" +
     "\n" +
-    "    </div>\n" +
-    "</div>\n" +
+    "    <md-card id=\"admin-layer-info\" ng-if=\"selection.layer\">\n" +
+    "        <md-card-title>\n" +
+    "            <md-card-title-text>\n" +
+    "                <span class=\"md-headline\">{{selection.layer.name}}</span>\n" +
+    "                <span class=\"md-subhead file-info\" file=\"selection.layer._sourceFile\"></span>\n" +
+    "            </md-card-title-text>\n" +
+    "        </md-card-title>\n" +
+    "        <md-card-actions layout=\"row\" layout-align=\"end center\">\n" +
+    "            <md-button class=\"md-icon-button\" ng-click=\"removeLayer(selection.layer)\" aria-label=\"Delete layer\">\n" +
+    "                <md-tooltip>Delete layer</md-tooltip>\n" +
+    "                <i class=\"fa fa-trash\" aria-hidden=\"true\"></i>\n" +
+    "            </md-button>\n" +
+    "            <md-button class=\"md-icon-button\" ng-click=\"selection.layer=null\">\n" +
+    "                <md-tooltip>Remove layer from map</md-tooltip>\n" +
+    "                <i class=\"fa fa-times\" aria-hidden=\"true\"></i>\n" +
+    "            </md-button>\n" +
+    "        </md-card-actions>\n" +
+    "    </md-card>\n" +
+    "</span>\n" +
     "");
 }]);
