@@ -78,7 +78,8 @@ layers = new Resource({
 .instanceLink('topojson',function(req,res){
     var featuresToTopo = require('./lib/featuresToTopo');
     // TODO - this current route is memory intensive
-    features.getModel().find({_layer: req._resourceId}).lean(true).exec(function(err,features){
+    var query = this.initQuery(features.getModel().find({_layer: req._resourceId}),req);
+    query.exec(function(err,features){
         if(err) {
             return Resource.sendError(res,500,'error finding features.',err);
         }
