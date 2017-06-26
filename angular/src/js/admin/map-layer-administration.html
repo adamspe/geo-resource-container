@@ -25,17 +25,18 @@
         <md-card-title>
             <md-card-title-text>
                 <span class="md-headline">{{selection.layer.name}}</span>
+                <span class="md-subhead feature-counts" ng-if="displayedOfTotal">displaying {{displayedOfTotal}} features</span>
                 <span class="md-subhead file-info" file="selection.layer._sourceFile"></span>
             </md-card-title-text>
         </md-card-title>
         <md-card-actions layout="row" layout-align="end center">
             <md-button class="md-icon-button" ng-click="removeLayer(selection.layer)" aria-label="Delete layer">
                 <md-tooltip>Delete layer</md-tooltip>
-                <i class="fa fa-trash" aria-hidden="true"></i>
+                <i class="fa fa-2x fa-trash" aria-hidden="true"></i>
             </md-button>
             <md-button class="md-icon-button" ng-click="selection.layer=null">
                 <md-tooltip>Remove layer from map</md-tooltip>
-                <i class="fa fa-times" aria-hidden="true"></i>
+                <i class="fa fa-2x fa-times" aria-hidden="true"></i>
             </md-button>
         </md-card-actions>
     </md-card>

@@ -1,61 +1,88 @@
 var Resource = require('odata-resource'),
     debug = require('debug')('geo-resource-container'),
-    q = require('q'),
     featuresToTopo = require('./lib/featuresToTopo'),
     conf = require('app-container-conf'),
     prefix = (conf.get('resources:$apiRoot')||'/api/v1/')+'geo/';
 
 module.exports = function(container,featuresResource) {
-    function exec(query) {
-        var def = q.defer();
-        query.exec(function(err,response){
-            if(err) {
-                def.reject(err);
-            } else {
-                def.resolve(response);
-            }
-        });
-        return def.promise;
-    }
+    // this is a stateful URL, server keeps track of what it understands to be
+    // the list of features the client currently has on the map...
     // don't overload intersects this behaves differently
-    // ?coordinates=a,b,c,d,e,f,j,k&$filter=<filter>
-    // POSTed body is an array of feature ids that the client
-    // already has in hand that should be excluded from the results
+    // ?coordinates=a,b,c,d,e,f,j,k&$filter=<filter>&$reset=true
+    // POSTed body is ignored
+    // $reset=true can be sent to clobber the server's state
     // response: {
-    //   topojson: <topojson of new features>
-    //   ids: [<list of feature ids that would comprise the complete result set>]
+    //   drop: [<feature id>],
+    //   add: <topojson>
     // }
     container.app().post(featuresResource.getRel()+'/featureBounds',function(req,res){
-        var q1,q2,cids = req.body;
-        if(!Array.isArray(req.body)) {
+        if(!req.query.$filter) {
             return Resource.sendError(res,400,'Bad request',err);
         }
+        var query;
         try {
-            q1 = featuresResource.intersectsQuery(req);
-            q2 = featuresResource.intersectsQuery(req);
+            query = featuresResource.intersectsQuery(req);
         } catch(err) {
             return Resource.sendError(res,400,'Bad request',err);
         }
-        if(cids.length) {
-            q1.where('_id').nin(cids);
-        }
-        q2.select('_id');
-        q.allSettled([exec(q1),exec(q2)]).then(function(result){
-console.log('allSettled');
-            var err = result[0].state !== 'fulfilled' ?
-                        result[0].reason :
-                        (result[1].state !== 'fulfilled' ? result[1].reason : undefined);
-            if(err) {
-                console.error(err);
-                return Resource.sendError(res,500,'Internal Server Error',err);
+        query.exec().then(function(result){
+            var session = req.session,
+                // could be the whole query string instead
+                filterJson = JSON.stringify(req.query.$filter),
+                responseObj = {},
+                foundIds = result.map(function(feature) { return feature._id}),
+                // TODO express-session serializes the session object (to/from JSON)
+                // as opposed to just storing it as an object in mongo, for large numbers
+                // of features this seems less than ideal and maybe this info should be placed elsewhere...
+                currentState = session.featureBoundsState;
+            if(req.query.$reset) {
+                currentState = {};
             }
-            // turn q1 results into topojson
-            var features = result[0].value,
-                ids = result[1].value;
-            res.json({
-                topojson: featuresToTopo(features,req),
-                ids: ids.map(function(d) { return d._id })
-            });
+            currentState = currentState||{};
+            currentState.$filter = currentState.$filter||filterJson;
+            if(currentState.$filter !== filterJson) {
+                // filter has changed clear any previous results
+                delete currentState.active;
+            }
+            currentState.active = currentState.active||[];
+            debug('found '+foundIds.length+' intersecting features');
+            if(foundIds.length) {
+                var drop = [].concat(currentState.active),
+                    add = [];
+                foundIds.forEach(function(id){
+                    id = id.toString();
+                    var idx = drop.indexOf(id);
+                    if(idx !== -1) {
+                        // client has this one already, ignore it
+                        drop.splice(idx,1);
+                    } else {
+                        // client doesn't yet have this one
+                        add.push(id);
+                    }
+                });
+                debug('client add feature ids',add);
+                debug('client drop feature ids',drop);
+                // anything left in active becomes drop
+                responseObj.drop = drop;
+                if(add.length) {
+                    responseObj.add = featuresToTopo(result.filter(function(feature){
+                        return add.indexOf(feature._id.toString()) !== -1;
+                    }),req);
+                }
+                // currentState.active becomes active - drop + add
+                currentState.active = currentState.active.filter(function(id){
+                        return drop.indexOf(id) === -1;
+                    }).concat(add);
+            } else {
+                // nothing found, tell the client to drop any features they have
+                responseObj.drop = currentState.active;
+                currentState.active = [];
+            }
+            session.featureBoundsState = currentState;
+            res.json(responseObj);
+        },function(err){
+            console.error(err);
+            return Resource.sendError(res,500,'Internal Server Error',err);
         });
     });
     return container;

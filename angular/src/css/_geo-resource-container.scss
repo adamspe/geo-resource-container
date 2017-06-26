@@ -57,7 +57,14 @@ layer-admin {
     }
 }
 #admin-layer-info {
+    background-color: rgba(255,255,255,0.85);
+    border-radius: 4px;
     .file-info .file-info-link {
         display: block;
+    }
+    .md-subhead.feature-counts {
+        font-size: 10px;
+        text-align: right;
+        padding-top: 0px;
     }
 }

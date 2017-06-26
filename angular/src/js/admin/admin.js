@@ -230,26 +230,39 @@ angular.module('app-container-geo.admin',[
                 uiGmapIsReady.promise(1).then(function(instances){
                     var map = instances[0].map;
                     $log.debug('map-layer-administration: ready');
-                    function reset() {
+                    function reset(selectedLayerToo) {
                         if($scope.activeMapLayer) {
                             $scope.activeMapLayer.remove();
                         }
                         delete $scope.activeMapLayer;
+                        delete $scope.displayedOfTotal;
+                        if(selectedLayerToo) {
+                            delete $scope.selection.layer;
+                        }
                     }
                     function setLayer(layer){
                         reset();
                         if(layer) {
-                            MapLayerService.getForLayer(layer).then(function(mapLayer){
-                                // TODO
-                                //$scope.activeMapLayer = (new DynamicMapLayer($scope,layer)).map(map).add();
-                                $scope.activeMapLayer = mapLayer.map(map).add();
-                            });
+                            $scope.activeMapLayer = (new DynamicMapLayer($scope,layer))
+                                .map(map)
+                                .changeListener(function(dl){
+                                    dl.totalFeatureCount().then(function(count){
+                                        $scope.displayedOfTotal = dl.featureCount()+'/'+count;
+                                        if(dl.featureCount() === dl.maxFeatures()) {
+                                            $scope.limitToast = NotificationService.addError('Features limit reached '+$scope.displayedOfTotal+'.  Zoom in or pan to limit bounds.');
+                                        } else if ($scope.limitToast) {
+                                            NotificationService.hideToast();
+                                            delete $scope.limitToast;
+                                        }
+                                    });
+                                })
+                                .add();
                         }
                     }
                     $scope.$watch('enabled',function(onOff){
                         $log.debug('map-layer-administration: '+(onOff ? 'on' : 'off'));
                         ($scope.adminModeChange||angular.noop)({mode: onOff});
-                        reset();
+                        reset(!onOff);
                     });
                     $scope.$watch('selection.layer',function(layer){
                         $log.debug('map-layer-administration: layer',layer);
@@ -272,8 +285,7 @@ angular.module('app-container-geo.admin',[
                             .ok('Yes')
                             .cancel('No'))
                             .then(function(){
-                                    delete $scope.selection.layer;
-                                    reset();
+                                    reset(true);
                                     l.$remove({id: l._id},function(){
                                         NotificationService.addInfo('Removed '+l.name);
                                     },NotificationService.addError);

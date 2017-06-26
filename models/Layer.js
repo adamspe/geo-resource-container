@@ -17,7 +17,7 @@ schema.post('remove',function(layer){
         if(err) {
             console.error(err);
         }
-    })
+    });
     File.remove({_id:layer._sourceFile},function(err){
         if(err) {
             console.error(err);
