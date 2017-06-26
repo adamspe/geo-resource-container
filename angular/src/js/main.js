@@ -15,6 +15,14 @@ angular.module('app-container-geo',[
         }
         return self.$featureCount.promise;
     };
+    Layer.prototype.topojson = function() {
+        var self = this,
+            def = $q.defer();
+        $http.get(self._links.topojson).then(function(response){
+            def.resolve(response.data);
+        },def.reject);
+        return def.promise;
+    };
     return Layer;
 }])
 .service('Feature',['$appService',function($appService) {
@@ -328,13 +336,24 @@ angular.module('app-container-geo',[
     DynamicMapLayer.prototype.add = function() {
         var self = this,
             map = self.map();
-        if(map && !self.$boundsListener) {
-            self.$mapInitialized = false;
-            self.$boundsListener = map.addListener('bounds_changed',function(){
-                self.boundsChanged();
+        if(!self.$mapInitialized) {
+            self.totalFeatureCount().then(function(count){
+                if(count < self.maxFeatures()) {
+                    $log.debug('DynamicMapLayer: layer has less than '+self.maxFeatures()+' loading all features.');
+                    // all features won't affect the limit, just load them all and avoid the
+                    // stress on the client/server
+                    self.$layerResource.topojson().then(function(topo){
+                        self.boundsResponse({add: topo});
+                    });
+                } else {
+                    $log.debug('DynamicMapLayer: layer has more than '+self.maxFeatures()+' loaded features will change based on map bounds.');
+                    self.$boundsListener = map.addListener('bounds_changed',function(){
+                        self.boundsChanged();
+                    });
+                    self.boundsChanged(); // get the ball rolling
+                }
             });
-            self.boundsChanged(); // get the ball rolling
-            $log.debug('DynamicMapLayer: listening for bounds_changed');
+
         }
         return self;
     };
@@ -355,6 +374,7 @@ angular.module('app-container-geo',[
             $log.debug('DynamicMapLayer: no longer listening for bounds_changed');
         }
         delete self.$boundsListener;
+        self.$mapInitialized = false;
     };
 
     DynamicMapLayer.prototype.boundsChanged = function() {
