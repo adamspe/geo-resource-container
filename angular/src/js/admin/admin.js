@@ -195,16 +195,17 @@ angular.module('app-container-geo.admin',[
     $scope.$watch('uploadedFile',function(file){
         if(file) {
             $log.debug('uploadedFile',file);
-            if(file.contentType !== 'application/zip') {
-                $log.debug('File is not a zip, deleting.');
-                NotificationService.addError({statusText: file.fileName+' is not a zip file.'});
+            if(file.contentType === 'application/zip' ||
+               /\.ndjson$/.test(file.filename)) {
+               $log.debug('Notifying server of new file, start pre-processing');
+               wsc.send({key:'state',currentState:STATE,data:file._id});
+           } else {
+                $log.debug('Unacceptable file type, deleting.');
+                NotificationService.addError({statusText: file.fileName+' is not a zip or ndjson file.'});
                 file.$remove({id: file._id},function(){
                     $log.debug('removed '+file.fileName);
                     delete $scope.uploadedFile;
                 },NotificationService.addError);
-            } else {
-                $log.debug('Notifying server of new file, start pre-processing');
-                wsc.send({key:'state',currentState:STATE,data:file._id});
             }
         }
     });

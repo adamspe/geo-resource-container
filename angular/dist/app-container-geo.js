@@ -1,6 +1,6 @@
 /*
  * app-container-geo
- * Version: 1.0.0 - 2017-06-26
+ * Version: 1.0.0 - 2017-09-14
  */
 
 /*! sprintf-js | Alexandru Marasteanu <hello@alexei.ro> (http://alexei.ro/) | BSD-3-Clause */
@@ -279,16 +279,17 @@ angular.module('app-container-geo.admin',[
     $scope.$watch('uploadedFile',function(file){
         if(file) {
             $log.debug('uploadedFile',file);
-            if(file.contentType !== 'application/zip') {
-                $log.debug('File is not a zip, deleting.');
-                NotificationService.addError({statusText: file.fileName+' is not a zip file.'});
+            if(file.contentType === 'application/zip' ||
+               /\.ndjson$/.test(file.filename)) {
+               $log.debug('Notifying server of new file, start pre-processing');
+               wsc.send({key:'state',currentState:STATE,data:file._id});
+           } else {
+                $log.debug('Unacceptable file type, deleting.');
+                NotificationService.addError({statusText: file.fileName+' is not a zip or ndjson file.'});
                 file.$remove({id: file._id},function(){
                     $log.debug('removed '+file.fileName);
                     delete $scope.uploadedFile;
                 },NotificationService.addError);
-            } else {
-                $log.debug('Notifying server of new file, start pre-processing');
-                wsc.send({key:'state',currentState:STATE,data:file._id});
             }
         }
     });
@@ -1034,7 +1035,7 @@ angular.module("js/admin/layer-create.html", []).run(["$templateCache", function
     "        <p ng-if=\"!STATE\">Waiting to establish connection...</p>\n" +
     "\n" +
     "        <div ng-show=\"STATE === STATES.FILE_UPLOAD\">\n" +
-    "            <p>Start by uploading the source of your layer (currently only zipped shapfile).</p>\n" +
+    "            <p>Start by uploading the source of your layer (currently only zipped shapfile or ndjson).</p>\n" +
     "            <input type=\"file\" file-model=\"fileToUpload\" file-resource=\"fileResource\" />\n" +
     "        </div>\n" +
     "\n" +

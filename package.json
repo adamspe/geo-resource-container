@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "app-container": "adamspe/app-container",
+    "extract-zip": "^1.6.5",
     "file-resource-container": "github:adamspe/file-resource-container",
     "fs-extra": "^2.0.0",
     "minimist": "^1.2.0",
@@ -25,8 +26,7 @@
     "prompt": "^1.0.0",
     "shapefile": "^0.5.10",
     "sprintf-js": "^1.0.3",
-    "topojson": "^2.2.0",
-    "unzip": "^0.1.11"
+    "topojson": "^2.2.0"
   },
   "devDependencies": {
     "app-container-login": "adamspe/app-container-login",
