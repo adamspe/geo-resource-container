@@ -1,0 +1,127 @@
+#!/usr/bin/env node
+
+let argv = require('minimist')(process.argv.slice(2)),
+    ShpFinder = require('./lib/shp-finder'),
+    ShpTitles = require('./lib/shp-titles'),
+    path = require('path'),
+    fs = require('fs'),
+    readline = require('readline'),
+    NdJsonPreProcessor = require('../../lib/layer-import/pre/NdJsonPreProcessor'),
+    PropertyFormatter = require('../../lib/property-formatter');
+    rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+function usage() {
+    console.log(`${path.basename(__filename)} -d <directory> -o <directory>`);
+    console.log('   -d directory to search for shp files.');
+    console.log('   -o directory to write intermidiate data to.');
+    process.exit(1);
+}
+
+let input_dir = argv['d'],
+    output_dir = argv['o'];
+if(!input_dir || !output_dir) {
+    usage();
+}
+
+input_dir = path.resolve(input_dir);
+output_dir = path.resolve(output_dir);
+
+Promise.all([input_dir,output_dir].map(d => {
+    return new Promise(resolve => {
+        fs.lstat(d,(err,stat) => {
+            if(err || !stat.isDirectory()) {
+                console.log(`${d} is not a directory`);
+                usage();
+            }
+            resolve();
+        })
+    });
+})).then(start);
+
+function getFmt(props) {
+    function get() {
+        return new Promise((resolve,reject) => {
+            rl.question('Name format: ',(answer) => {
+                try {
+                    let example = (new PropertyFormatter(answer)).format(props);
+                    resolve(answer);
+                } catch(e) {
+                    reject(e);
+                }
+            });
+        });
+    }
+    return new Promise(resolve => {
+        function tryAgain() {
+            get().then(resolve,tryAgain);
+        }
+        tryAgain();
+    });
+}
+function start() {
+    let transforms = require('./lib/transforms')(output_dir);
+
+    (new ShpTitles(new ShpFinder(input_dir)))
+    .on('end',map => {
+        let shps = Object.keys(map);
+        shps.forEach(shp => {
+            // TODO possible to have no title...
+            map[shp] = {
+                shp: shp,
+                title: map[shp]
+            };
+        });
+        // do this work serially to avoid over-taxing the machine
+        function next() {
+            let shp = shps.shift();
+            transforms.toGeoJson(shp,true/*simplified*/)
+                .then(transforms.noNewLines)
+                .then(transforms.toNdJson)
+                .then((ndJson) => {
+                    map[shp].ndJson = ndJson;
+                    if(shps.length) {
+                        return next();
+                    }
+                    shps = Object.keys(map);
+                    console.log(`Processed ${shps.length} shapfiles.`);
+                    nextFormat();
+                });
+        }
+
+        function nextFormat() {
+            let shp = shps.shift(),
+                record = map[shp],
+                ndJson = record.ndJson,
+                collector = new NdJsonPreProcessor(`${output_dir}/${ndJson}`);
+            collector.on('complete',results => {
+                record.featureCount = results.featureCount;
+                record.examplePropertiesAnnotated = results.examplePropertiesAnnotated;
+                console.log('');
+                console.log('-------------------------------------');
+                console.log(`Layer: ${record.title}`);
+                for(let prop in results.examplePropertiesAnnotated) {
+                    let o = results.examplePropertiesAnnotated[prop];
+                    console.log(`${prop}: ${o.value} [type: ${o.type}, unique: ${o.unique}]`);
+                }
+                getFmt(results.exampleProperties).then(fmt => {
+                    record.fmt = fmt;
+                    if(shps.length) {
+                        return nextFormat();
+                    }
+                    // write the results out
+                    fs.writeFile(`${output_dir}/layers.json`,JSON.stringify(
+                        Object.keys(map).map(shp => map[shp]),null,2
+                    ),err => {
+                        console.log('complete');
+                        process.exit(0);
+                    });
+                });
+            }).start();
+        }
+        next();
+    })
+    .find();
+}
