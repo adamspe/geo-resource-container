@@ -1,17 +1,15 @@
 let path = require('path'),
     fs = require('fs'),
-    spawn = require('child_process').spawn;
+    spawn = require('child_process').spawn,
+    NdJsonPreProcessor = require('../../../lib/layer-import/pre/NdJsonPreProcessor');
 
+const TO_NDJSON_SCRIPT = `${__dirname}/scripts/toNdJson`;
 
-function do_spawn(cmd,args,on_out,on_err) {
+function do_spawn(cmd,args) {
     return new Promise(resolve => {
         let child = spawn(cmd,args);
-        if(on_out) {
-            child.stdout.on('data',on_out);
-        }
-        if(on_err) {
-            child.stderr.on('data',on_err);
-        }
+        child.stdout.on('data',d => console.log(d));
+        child.stderr.on('data',d => console.error(d));
         child.on('close',code => {
             if(code === 0) {
                 return resolve();
@@ -22,24 +20,18 @@ function do_spawn(cmd,args,on_out,on_err) {
     });
 }
 
-module.exports = function(output_dir) {
-    return {
-        toGeoJson: function(shp,simplify) {
+module.exports = function(output_dir,argv) {
+    let cleanup = !argv.nocleanup,
+        maxAverageFeatureSize = argv.maxAverageFeatureSize ? +argv.maxAverageFeatureSize : undefined,
+        maxFeatures = argv.maxFeatures ? +argv.maxFeatures : 5000;
+
+    let transforms = {
+        // sets record.geoJson resolves record
+        toGeoJson: function(record) {
             return new Promise(resolve => {
-                let baseName = path.basename(shp,'.shp'),
-                    geoJson = `${baseName}.json`,
-                    log = d => console.log(`${d}`);
-
-                /* won't deal with making sure we're using WGS84 coordinates
-                console.log(`-- simplify ${path.basename(shp,'.shp')}`);
-                do_spawn('mapshaper',[
-                    shp,
-                    '--simplify', 'visvalingam', 'weighted', '10%', '-o', 'format=geojson',
-                    `${output_dir}/${geoJson}`
-                ],log,log).then(() => {
-                    resolve(geoJson) });*/
-
-                // #1 ogr2ogr
+                let shp = record.shp,
+                    baseName = path.basename(shp,'.shp'),
+                    geoJson = `${baseName}.json`;
                 console.log(`toGeoJson: ${baseName}`);
                 // consider using https://www.npmjs.com/package/ogr2ogr
                 do_spawn('ogr2ogr',[
@@ -47,57 +39,92 @@ module.exports = function(output_dir) {
                         `${output_dir}/${geoJson}`,
                         '-t_srs','WGS84',
                         `${shp}`
-                    ],
-                    log,log).then(() => {
-                        if(!simplify) {
-                            return resolve(geoJson);
-                        }
-                        console.log(`simplify: ${baseName}`);
-                        let simplified = `${baseName}_simplified.json`;
-                        // #2 mapshaper to simplify
-                        do_spawn('mapshaper',[
-                            `${output_dir}/${geoJson}`,
-                            '--simplify', 'visvalingam', 'weighted', '10%', '-o', 'format=geojson',
-                            `${output_dir}/${simplified}`
-                        ],log,log).then(() => {
-                            resolve(simplified);
+                ]).then(() => {
+                    transforms.noNewLines(geoJson)
+                        .then((geoJson) => {
+                            record.geoJson = geoJson;
+                            resolve(record);
                         });
+                });
+            });
+        },
+        // sets record.ndJson resolves record
+        toNdJson(record) {
+            return new Promise(resolve => {
+                let geoJson = record.geoJson,
+                    ndJson = path.basename(geoJson,'.json')+'.ndjson';
+                do_spawn('sh',[
+                    TO_NDJSON_SCRIPT,
+                    `${output_dir}/${geoJson}`,
+                    `${output_dir}/${ndJson}`,
+                ]).then(() => {
+                    record.ndJson = ndJson;
+                    resolve(record);
+                });
+            });
+        },
+        simplifyIfNecessary: function(record) {
+            return new Promise(resolve => {
+                let geoJson = record.geoJson,
+                    ndJson = record.ndJson;
+                transforms.collectProperties(ndJson)
+                    .then(results => {
+                        record.featureCount = results.featureCount;
+                        record.examplePropertiesAnnotated = results.examplePropertiesAnnotated;
+                        record.exampleProperties = results.exampleProperties;
+                        // TODO simplification logic
+                        resolve(record);
                     });
             });
         },
+        splitIfNecessary: function(record) {
+            return new Promise(resolve => {
+                if(record.featureCount > maxFeatures) {
+                    console.log(`Max features exceeded ${record.featureCount} exceeds the maximum of ${maxFeatures} breaking "${record.title}" into multiple layers.`);
+                    transforms.split(record.ndJson).then(splits => {
+                        record.ndJson = splits;
+                        resolve(record);
+                    });
+                } else {
+                    resolve(record);
+                }
+            });
+        },
+        simplify: function(geoJson,pcnt) {
+            return new Promise(resolve => {
+                let baseName = path.baseN(geoJson,'.json'),
+                    simplified = `${baseName}_simplified.json`;
+                do_spawn('mapshaper',[
+                    `${output_dir}/${geoJson}`,
+                    '--simplify', 'visvalingam', 'weighted', `${pcnt}%`, '-o', 'format=geojson',
+                    `${output_dir}/${simplified}`
+                ]).then(() => {
+                    //fs.unlinkSync(`${output_dir}/${geoJson}`);
+                    transforms.noNewLines(simplified)
+                        .then(() => {
+                            resolve(simplified);
+                        });
+                });
+            });
+        },
         noNewLines: function(geoJson) {
-            let script = `${__dirname}/scripts/removeNewLines`,
-                log = d => console.log(`${d}`);
+            let script = `${__dirname}/scripts/removeNewLines`;
             return new Promise(resolve => {
                 do_spawn('sh',[
                     script,
                     `${output_dir}/${geoJson}`
-                ],log,log).then(() => {
+                ]).then(() => {
                     resolve(geoJson);
                 });
             });
         },
-        toNdJson(geoJson) {
-            let ndJson = path.basename(geoJson,'.json')+'.ndjson',
-                script = `${__dirname}/scripts/toNdJson`,
-                log = d => console.log(`${d}`);
-            return new Promise(resolve => {
-                do_spawn('sh',[
-                    script,
-                    `${output_dir}/${geoJson}`,
-                    `${output_dir}/${ndJson}`,
-                ],log,log).then(() => {
-                    resolve(ndJson);
-                });
-            });
-        },
-        split: function(ndJson,max) {
+        split: function(ndJson) {
             let f = `${output_dir}/${ndJson}`,
                 baseF = path.basename(f,'.ndjson'),
                 pfx = `${f}.`;
             return new Promise(resolve => {
                 do_spawn('split',[
-                    '-l', max, f, pfx
+                    '-l', maxFeatures, f, pfx
                 ]).then(() => {
                     fs.readdir(output_dir,(err,files) => {
                         let split = `${ndJson}.`,
@@ -112,10 +139,35 @@ module.exports = function(output_dir) {
                             fs.renameSync(`${output_dir}/${f}`,`${output_dir}/${newF}`);
                             return newF;
                         });
+                        if(cleanup) {
+                            fs.unlinkSync(f);
+                        }
                         resolve(splits);
                     });
                 });
             });
+        },
+        collectProperties: function(ndJson) {
+            return new Promise(resolve => {
+                (new NdJsonPreProcessor(`${output_dir}/${ndJson}`))
+                    .on('complete',resolve)
+                    .start();
+            });
+        },
+        cleanup: function(record) {
+            return new Promise(resolve => {
+                if(cleanup) {
+                    ['geoJson','geoJsonSimplified'].forEach(key => {
+                        if(record[key]) {
+                            fs.unlinkSync(`${output_dir}/${record[key]}`);
+                            delete record[key];
+                        }
+                    });
+                }
+                resolve(record);
+            });
         }
     };
+
+    return transforms;
 };

@@ -1,5 +1,4 @@
 #!/bin/sh
 
 ndjson-split 'd.features' < $1 > $2
-rm $1
 exit 0

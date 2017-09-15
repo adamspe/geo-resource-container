@@ -6,8 +6,9 @@ let argv = require('minimist')(process.argv.slice(2)),
     path = require('path'),
     fs = require('fs'),
     readline = require('readline'),
-    NdJsonPreProcessor = require('../../lib/layer-import/pre/NdJsonPreProcessor'),
     PropertyFormatter = require('../../lib/property-formatter');
+
+process.on('unhandledRejection',r => console.error(r));
 
 function usage() {
     let scrpt = path.basename(__filename);
@@ -16,7 +17,9 @@ function usage() {
                 -d: directory to search for shp files.
                 -o: directory to write intermidiate data to.
      --maxFeatures: number of features to limit to one layer, large layers will be split into multiple (default: 5000)
+     --maxAverageFeatureSize: size (bytes) to try to limit features to.
      --mergeLayers: path to previous layers.json to get formats from (and avoid re-prompting if tailoring seed with repeated runs).
+         --nocleanup: do not cleanup intermediate files (for dev purposes).
           --script: if the script to import the seed should be generated
     The following are required to run --script
     [Note: these will be stored in plaintext in the generated script]
@@ -101,13 +104,13 @@ function generate_script() {
 }
 
 function generate_seed() {
-    let transforms = require('./lib/transforms')(output_dir),
-        rl = readline.createInterface({
+    let rl = readline.createInterface({
                 input: process.stdin,
                 output: process.stdout
             }),
-        maxFeatures = argv['maxFeatures'] ? +argv['maxFeatures'] : 5000,
-        previousLayers;
+        previousLayers,
+        transforms = require('./lib/transforms')(output_dir,argv);
+
     if(argv['mergeLayers']) {
         try {
             previousLayers = require(argv['mergeLayers']).reduce((map,l) => {
@@ -146,6 +149,7 @@ function generate_seed() {
         let shps = Object.keys(map),
             totalShps = shps.length,
             procCnt = 0;
+
         shps.forEach(shp => {
             // TODO possible to have no title...
             map[shp] = {
@@ -153,42 +157,25 @@ function generate_seed() {
                 title: map[shp]
             };
         });
+
         // do this work serially to avoid over-taxing the machine
-        function next() {
+        function nextShp() {
             let shp = shps.shift(),
                 record = map[shp];
             console.log();
             console.log(`Processing [${++procCnt}/${totalShps}]: ${path.basename(shp,'.shp')}`);
-            transforms.toGeoJson(shp,true/*simplified*/)
-                .then(transforms.noNewLines)
+            transforms.toGeoJson(record)
                 .then(transforms.toNdJson)
-                .then((ndJson) => {
-                    map[shp].ndJson = ndJson;
-                    let collector = new NdJsonPreProcessor(`${output_dir}/${ndJson}`),
-                        moveOn = () => {
-                            if(shps.length) {
-                                return next();
-                            }
-                            shps = Object.keys(map);
-                            console.log(`Processed ${shps.length} shapfiles.`);
-                            nextFormat();
-                        };
-                    collector.on('complete', results => {
-                        record.featureCount = results.featureCount;
-                        record.examplePropertiesAnnotated = results.examplePropertiesAnnotated;
-                        record.exampleProperties = results.exampleProperties;
-                        if(results.featureCount > maxFeatures) {
-                            // this is perhaps an odd time to do this work but would rather not count features multiple times
-                            console.log(`Max features exceeded ${results.featureCount} exceeds the maximum of ${maxFeatures} breaking "${record.title}" into multiple layers.`)
-                            transforms.split(ndJson,maxFeatures).then(splits => {
-                                record.ndJson = splits;
-                                moveOn();
-                            });
-                        } else {
-                            moveOn();
-                        }
-                    }).start();
-
+                .then(transforms.simplifyIfNecessary)
+                .then(transforms.splitIfNecessary)
+                .then(transforms.cleanup)
+                .then(record => {
+                    if(shps.length) {
+                        return nextShp();
+                    }
+                    shps = Object.keys(map);
+                    console.log(`Processed ${shps.length} shapfiles.`);
+                    nextFormat();
                 });
         }
 
@@ -222,7 +209,9 @@ function generate_seed() {
                 storeFmt(fmt);
             });
         }
-        next();
+
+        // get the ball rolling
+        nextShp();
     })
     .find();
 }
