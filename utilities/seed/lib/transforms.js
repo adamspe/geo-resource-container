@@ -4,12 +4,13 @@ let path = require('path'),
     NdJsonPreProcessor = require('../../../lib/layer-import/pre/NdJsonPreProcessor');
 
 const TO_NDJSON_SCRIPT = `${__dirname}/scripts/toNdJson`;
+const REMOVE_NEWLINES_SCRIPT = `${__dirname}/scripts/removeNewLines`;
 
 function do_spawn(cmd,args) {
     return new Promise(resolve => {
         let child = spawn(cmd,args);
-        child.stdout.on('data',d => console.log(d));
-        child.stderr.on('data',d => console.error(d));
+        child.stdout.on('data',d => console.log(`${d}`));
+        child.stderr.on('data',d => console.error(`stderr: ${d}`));
         child.on('close',code => {
             if(code === 0) {
                 return resolve();
@@ -22,7 +23,7 @@ function do_spawn(cmd,args) {
 
 module.exports = function(output_dir,argv) {
     let cleanup = !argv.nocleanup,
-        maxAverageFeatureSize = argv.maxAverageFeatureSize ? +argv.maxAverageFeatureSize : undefined,
+        maxAverageFeatureSize = argv.maxAverageFeatureSize ? ((+argv.maxAverageFeatureSize)*1024) : undefined,
         maxFeatures = argv.maxFeatures ? +argv.maxFeatures : 5000;
 
     let transforms = {
@@ -72,8 +73,33 @@ module.exports = function(output_dir,argv) {
                         record.featureCount = results.featureCount;
                         record.examplePropertiesAnnotated = results.examplePropertiesAnnotated;
                         record.exampleProperties = results.exampleProperties;
-                        // TODO simplification logic
-                        resolve(record);
+                        if(!maxAverageFeatureSize) {
+                            return resolve(record);
+                        }
+                        let stat = fs.statSync(`${output_dir}/${ndJson}`),
+                            avg = stat.size/record.featureCount;
+                        if(avg < maxAverageFeatureSize) {
+                            return resolve(record);
+                        }
+                        console.log(`"${record.title}" exceeds maxAverageFeatureSize ${stat.size}/${record.featureCount} = `+avg.toFixed(2)+' simplifying');
+                        transforms.simplify(record.geoJson,(maxAverageFeatureSize/avg)*100)
+                            .then(simplified => {
+                                record.geoJsonSimplified = simplified;
+                                transforms.toNdJson({
+                                    geoJson: simplified
+                                }).then(result => {
+                                    if(cleanup) {
+                                        // we've replaced the previous ndJson with a simplified one
+                                        // don't leave the old one dangling
+                                        fs.unlinkSync(`${output_dir}/${record.ndJson}`);
+                                    }
+                                    record.ndJson = result.ndJson;
+                                    stat = fs.statSync(`${output_dir}/${result.ndJson}`);
+                                    avg = stat.size/record.featureCount;
+                                    console.log('simplified average = '+avg.toFixed(2));
+                                    resolve(record);
+                                });
+                            });
                     });
             });
         },
@@ -92,14 +118,15 @@ module.exports = function(output_dir,argv) {
         },
         simplify: function(geoJson,pcnt) {
             return new Promise(resolve => {
-                let baseName = path.baseN(geoJson,'.json'),
+                let baseName = path.basename(geoJson,'.json'),
                     simplified = `${baseName}_simplified.json`;
+                pcnt = pcnt.toFixed(2);
+                console.log(`Simplifying ${geoJson} to retain ${pcnt}% of removable points`);
                 do_spawn('mapshaper',[
                     `${output_dir}/${geoJson}`,
                     '--simplify', 'visvalingam', 'weighted', `${pcnt}%`, '-o', 'format=geojson',
                     `${output_dir}/${simplified}`
                 ]).then(() => {
-                    //fs.unlinkSync(`${output_dir}/${geoJson}`);
                     transforms.noNewLines(simplified)
                         .then(() => {
                             resolve(simplified);
@@ -108,10 +135,9 @@ module.exports = function(output_dir,argv) {
             });
         },
         noNewLines: function(geoJson) {
-            let script = `${__dirname}/scripts/removeNewLines`;
             return new Promise(resolve => {
                 do_spawn('sh',[
-                    script,
+                    REMOVE_NEWLINES_SCRIPT,
                     `${output_dir}/${geoJson}`
                 ]).then(() => {
                     resolve(geoJson);
