@@ -8,28 +8,46 @@ let argv = require('minimist')(process.argv.slice(2)),
     readline = require('readline'),
     NdJsonPreProcessor = require('../../lib/layer-import/pre/NdJsonPreProcessor'),
     PropertyFormatter = require('../../lib/property-formatter');
-    rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
 
 function usage() {
-    console.log(`${path.basename(__filename)} -d <directory> -o <directory>`);
-    console.log('   -d directory to search for shp files.');
-    console.log('   -o directory to write intermidiate data to.');
+    let scrpt = path.basename(__filename);
+    console.log(`
+    ${scrpt} [-d <directory>] -o <directory> [--script]
+                -d: directory to search for shp files.
+                -o: directory to write intermidiate data to.
+     --maxFeatures: number of features to limit to one layer, large layers will be split into multiple (default: 5000)
+     --mergeLayers: path to previous layers.json to get formats from (and avoid re-prompting if tailoring seed with repeated runs).
+          --script: if the script to import the seed should be generated
+    The following are required to run --script
+    [Note: these will be stored in plaintext in the generated script]
+            --user: the username to login to the system with (admin role required
+        --password: the password for --user
+
+    E.g.
+    -- generate a new seed like
+    $ ${scrpt} -d ~/dirContainingShps -o ~/seed1
+
+    -- process seed to generate script to import it like
+    $ ${scrpt} -o ~/seed1 --script --user foo@bar.com --password secret
+        `);
     process.exit(1);
 }
 
 let input_dir = argv['d'],
-    output_dir = argv['o'];
-if(!input_dir || !output_dir) {
+    output_dir = argv['o'],
+    script = argv['script'];
+if(!script && (!input_dir || !output_dir)) {
+    usage();
+} else if (script && !output_dir) {
     usage();
 }
 
-input_dir = path.resolve(input_dir);
+input_dir = input_dir ? path.resolve(input_dir) : undefined;
 output_dir = path.resolve(output_dir);
 
-Promise.all([input_dir,output_dir].map(d => {
+let bootstrap = script ? generate_script : generate_seed;
+
+Promise.all((script ? [output_dir] : [input_dir,output_dir]).map(d => {
     return new Promise(resolve => {
         fs.lstat(d,(err,stat) => {
             if(err || !stat.isDirectory()) {
@@ -39,34 +57,95 @@ Promise.all([input_dir,output_dir].map(d => {
             resolve();
         })
     });
-})).then(start);
+})).then(bootstrap);
 
-function getFmt(props) {
-    function get() {
-        return new Promise((resolve,reject) => {
-            rl.question('Name format: ',(answer) => {
-                try {
-                    let example = (new PropertyFormatter(answer)).format(props);
-                    resolve(answer);
-                } catch(e) {
-                    reject(e);
-                }
+function generate_script() {
+    let user = argv['user'],
+        pass = argv['password'];
+    if(!user || !pass) {
+        usage();
+    }
+    let layers,
+        addScript = path.resolve(`${__dirname}/../../bin/add-layer`),
+        importScript = path.resolve(`${output_dir}/import.sh`);
+    try {
+        layers = require(`${output_dir}/layers.json`);
+    } catch(ex) {
+        console.log(`No layers.json found in ${output_dir}`);
+    }
+    let script = fs.createWriteStream(importScript)
+        .on('error',(e) => {
+            console.log(e);
+            process.exit(1);
+        })
+        .on('finish',() => {
+            console.log(`${importScript}`);
+            process.exit(0);
+        });
+    script.write("#!/bin/sh\n\n");
+    layers.forEach(l => {
+        l.layerSource = l.layerSource||'none';
+
+        if(Array.isArray(l.ndJson)) {
+            l.ndJson.forEach((f,i) => {
+                let title = `${l.title} [${i+1}/${l.ndJson.length}]`;
+                script.write(`echo "Importing ${title}"\n`);
+                script.write(`${addScript} -f ./${f} '--layerSource=${l.layerSource}' '--layerName=${title}' '--featureIdFmt=${l.fmt}' '--featureNameFmt=${l.fmt}' '--user=${user}' '--password=${pass}'\n\n`);
             });
+        } else {
+            script.write(`echo "Importing ${l.title}"\n`);
+            script.write(`${addScript} -f ./${l.ndJson} '--layerSource=${l.layerSource}' '--layerName=${l.title}' '--featureIdFmt=${l.fmt}' '--featureNameFmt=${l.fmt}' '--user=${user}' '--password=${pass}'\n\n`);
+        }
+    });
+    script.end();
+}
+
+function generate_seed() {
+    let transforms = require('./lib/transforms')(output_dir),
+        rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            }),
+        maxFeatures = argv['maxFeatures'] ? +argv['maxFeatures'] : 5000,
+        previousLayers;
+    if(argv['mergeLayers']) {
+        try {
+            previousLayers = require(argv['mergeLayers']).reduce((map,l) => {
+                map[l.shp] = l;
+                return map;
+            },{});
+        } catch (e) {
+            console.log(`Unable to load mergeLayers ${argv['mergeLayers']}`);
+            usage();
+        }
+    }
+
+    function getFmt(props) {
+        function get() {
+            return new Promise((resolve,reject) => {
+                rl.question('Name format: ',(answer) => {
+                    try {
+                        let example = (new PropertyFormatter(answer)).format(props);
+                        resolve(answer);
+                    } catch(e) {
+                        reject(e);
+                    }
+                });
+            });
+        }
+        return new Promise(resolve => {
+            function tryAgain() {
+                get().then(resolve,tryAgain);
+            }
+            tryAgain();
         });
     }
-    return new Promise(resolve => {
-        function tryAgain() {
-            get().then(resolve,tryAgain);
-        }
-        tryAgain();
-    });
-}
-function start() {
-    let transforms = require('./lib/transforms')(output_dir);
 
     (new ShpTitles(new ShpFinder(input_dir)))
     .on('end',map => {
-        let shps = Object.keys(map);
+        let shps = Object.keys(map),
+            totalShps = shps.length,
+            procCnt = 0;
         shps.forEach(shp => {
             // TODO possible to have no title...
             map[shp] = {
@@ -76,18 +155,40 @@ function start() {
         });
         // do this work serially to avoid over-taxing the machine
         function next() {
-            let shp = shps.shift();
+            let shp = shps.shift(),
+                record = map[shp];
+            console.log();
+            console.log(`Processing [${++procCnt}/${totalShps}]: ${path.basename(shp,'.shp')}`);
             transforms.toGeoJson(shp,true/*simplified*/)
                 .then(transforms.noNewLines)
                 .then(transforms.toNdJson)
                 .then((ndJson) => {
                     map[shp].ndJson = ndJson;
-                    if(shps.length) {
-                        return next();
-                    }
-                    shps = Object.keys(map);
-                    console.log(`Processed ${shps.length} shapfiles.`);
-                    nextFormat();
+                    let collector = new NdJsonPreProcessor(`${output_dir}/${ndJson}`),
+                        moveOn = () => {
+                            if(shps.length) {
+                                return next();
+                            }
+                            shps = Object.keys(map);
+                            console.log(`Processed ${shps.length} shapfiles.`);
+                            nextFormat();
+                        };
+                    collector.on('complete', results => {
+                        record.featureCount = results.featureCount;
+                        record.examplePropertiesAnnotated = results.examplePropertiesAnnotated;
+                        record.exampleProperties = results.exampleProperties;
+                        if(results.featureCount > maxFeatures) {
+                            // this is perhaps an odd time to do this work but would rather not count features multiple times
+                            console.log(`Max features exceeded ${results.featureCount} exceeds the maximum of ${maxFeatures} breaking "${record.title}" into multiple layers.`)
+                            transforms.split(ndJson,maxFeatures).then(splits => {
+                                record.ndJson = splits;
+                                moveOn();
+                            });
+                        } else {
+                            moveOn();
+                        }
+                    }).start();
+
                 });
         }
 
@@ -95,31 +196,31 @@ function start() {
             let shp = shps.shift(),
                 record = map[shp],
                 ndJson = record.ndJson,
-                collector = new NdJsonPreProcessor(`${output_dir}/${ndJson}`);
-            collector.on('complete',results => {
-                record.featureCount = results.featureCount;
-                record.examplePropertiesAnnotated = results.examplePropertiesAnnotated;
-                console.log('');
-                console.log('-------------------------------------');
-                console.log(`Layer: ${record.title}`);
-                for(let prop in results.examplePropertiesAnnotated) {
-                    let o = results.examplePropertiesAnnotated[prop];
-                    console.log(`${prop}: ${o.value} [type: ${o.type}, unique: ${o.unique}]`);
-                }
-                getFmt(results.exampleProperties).then(fmt => {
+                storeFmt = fmt => {
                     record.fmt = fmt;
                     if(shps.length) {
                         return nextFormat();
                     }
                     // write the results out
                     fs.writeFile(`${output_dir}/layers.json`,JSON.stringify(
-                        Object.keys(map).map(shp => map[shp]),null,2
-                    ),err => {
+                        Object.keys(map).map(shp => map[shp]),null,2),err => {
                         console.log('complete');
                         process.exit(0);
                     });
-                });
-            }).start();
+                }
+            if(previousLayers && previousLayers[shp] && previousLayers[shp].fmt) {
+                return storeFmt(previousLayers[shp].fmt);
+            }
+            console.log('');
+            console.log('-------------------------------------');
+            console.log(`Layer: ${record.title}`);
+            for(let prop in record.examplePropertiesAnnotated) {
+                let o = record.examplePropertiesAnnotated[prop];
+                console.log(`${prop}: ${o.value} [type: ${o.type}, unique: ${o.unique}]`);
+            }
+            getFmt(record.exampleProperties).then(fmt => {
+                storeFmt(fmt);
+            });
         }
         next();
     })
