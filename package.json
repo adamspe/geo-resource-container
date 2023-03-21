@@ -19,7 +19,7 @@
     "file-resource-container": "github:adamspe/file-resource-container",
     "fs-extra": "^2.0.0",
     "minimist": "^1.2.0",
-    "mongoose-geojson-schema": "^2.1.2",
+    "mongoose-geojson-schema": "2.1.2",
     "ndjson": "^1.5.0",
     "node-find-files": "0.0.4",
     "path": "^0.12.7",
