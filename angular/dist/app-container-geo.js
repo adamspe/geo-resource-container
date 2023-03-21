@@ -1,6 +1,6 @@
 /*
  * app-container-geo
- * Version: 1.0.0 - 2017-09-14
+ * Version: 1.0.0 - 2017-09-18
  */
 
 /*! sprintf-js | Alexandru Marasteanu <hello@alexei.ro> (http://alexei.ro/) | BSD-3-Clause */
@@ -1086,7 +1086,7 @@ angular.module("js/admin/map-layer-administration.html", []).run(["$templateCach
     "            <md-card-title-text>\n" +
     "                <span class=\"md-headline\">{{selection.layer.name}}</span>\n" +
     "                <span class=\"md-subhead feature-counts\" ng-if=\"displayedOfTotal\">displaying {{displayedOfTotal}} features</span>\n" +
-    "                <span class=\"md-subhead file-info\" file=\"selection.layer._sourceFile\"></span>\n" +
+    "                <span ng-if=\"selection.layer._sourceFile\" class=\"md-subhead file-info\" file=\"selection.layer._sourceFile\"></span>\n" +
     "            </md-card-title-text>\n" +
     "        </md-card-title>\n" +
     "        <md-card-actions layout=\"row\" layout-align=\"end center\">\n" +

@@ -18,6 +18,7 @@ function usage() {
                 -o: directory to write intermidiate data to.
      --maxFeatures: number of features to limit to one layer, large layers will be split into multiple (default: 5000)
      --maxAverageFeatureSize: size (kilobytes) to try to limit features to.
+     --coordinatePrecision: number of decimal places of lat/lng to retain (default 5)
      --mergeLayers: path to previous layers.json to get formats from (and avoid re-prompting if tailoring seed with repeated runs).
          --nocleanup: do not cleanup intermediate files (for dev purposes).
           --script: if the script to import the seed should be generated

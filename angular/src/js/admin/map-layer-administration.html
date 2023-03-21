@@ -26,7 +26,7 @@
             <md-card-title-text>
                 <span class="md-headline">{{selection.layer.name}}</span>
                 <span class="md-subhead feature-counts" ng-if="displayedOfTotal">displaying {{displayedOfTotal}} features</span>
-                <span class="md-subhead file-info" file="selection.layer._sourceFile"></span>
+                <span ng-if="selection.layer._sourceFile" class="md-subhead file-info" file="selection.layer._sourceFile"></span>
             </md-card-title-text>
         </md-card-title>
         <md-card-actions layout="row" layout-align="end center">

@@ -24,7 +24,8 @@ function do_spawn(cmd,args) {
 module.exports = function(output_dir,argv) {
     let cleanup = !argv.nocleanup,
         maxAverageFeatureSize = argv.maxAverageFeatureSize ? ((+argv.maxAverageFeatureSize)*1024) : undefined,
-        maxFeatures = argv.maxFeatures ? +argv.maxFeatures : 5000;
+        maxFeatures = argv.maxFeatures ? +argv.maxFeatures : 5000,
+        coordinatePrecision = argv.coordinatePrecision ? +argv.coordinatePrecision : 5;
 
     let transforms = {
         // sets record.geoJson resolves record
@@ -38,6 +39,7 @@ module.exports = function(output_dir,argv) {
                 do_spawn('ogr2ogr',[
                         '-f','GeoJSON',
                         `${output_dir}/${geoJson}`,
+                        '-lco', `COORDINATE_PRECISION=${coordinatePrecision}`, // 5 down to ~1.1m accuracy
                         '-t_srs','WGS84',
                         `${shp}`
                 ]).then(() => {
